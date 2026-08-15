@@ -1,0 +1,129 @@
+/* InputBar.css */
+
+.input-bar-wrapper {
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border-top: var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* ── Quick prompt chips ─────────────────────────────────────── */
+.quick-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.quick-chip {
+  padding: 6px var(--space-md);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: var(--font-family);
+  white-space: nowrap;
+}
+
+.quick-chip:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.quick-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Input row ──────────────────────────────────────────────── */
+.input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg);
+  transition: var(--transition-fast);
+}
+
+.input-bar:focus-within {
+  border-color: var(--color-border-hover);
+  box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+
+.input-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 28px;
+  max-height: 160px;
+  padding: 4px 0;
+}
+
+.input-textarea::placeholder { color: var(--color-text-subtle); }
+
+.input-textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Send button ────────────────────────────────────────────── */
+.send-button {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-surface-3);
+  color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.send-button.send-active {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-glow);
+}
+
+.send-button.send-active:hover {
+  transform: scale(1.07);
+  box-shadow: 0 0 24px rgba(99,102,241,0.5);
+}
+
+.send-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Spinner for loading state */
+.send-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Hint text ──────────────────────────────────────────────── */
+.input-hint {
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  text-align: center;
+}

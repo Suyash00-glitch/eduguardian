@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Environment
+# IMPORTANT: .env.example is intentionally NOT listed here — it must stay tracked in git
+.env
+.env.local
+.env.*.local
+
+# Node / Frontend
+node_modules/
+.vite/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Alembic
+chatbot/backend/db/migrations/versions/*.pyc
+
+# Logs
+*.log
+logs/
+
+# Database files (never commit local DB files)
+*.db
+*.sqlite
+*.sqlite3
+eduguardian_chatbot.db
