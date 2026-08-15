@@ -1,406 +1,319 @@
-import React from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  TrendingUp,
-  TrendingDown,
-  CalendarDays,
-  CheckCircle2,
-  BookOpen,
   Activity,
-  Target,
+  ArrowDownRight,
+  ArrowUpRight,
+  BookOpen,
+  CheckCircle2,
+  ClipboardCheck,
+  TrendingUp,
 } from "lucide-react";
 
-const attendanceData = [
-  { week: "W1", value: 78 },
-  { week: "W2", value: 76 },
-  { week: "W3", value: 75 },
-  { week: "W4", value: 79 },
-  { week: "W5", value: 81 },
-  { week: "W6", value: 82 },
-  { week: "W7", value: 84 },
-  { week: "W8", value: 85 },
-];
-
-const quizData = [
-  { week: "W1", value: 68 },
-  { week: "W2", value: 72 },
-  { week: "W3", value: 69 },
-  { week: "W4", value: 74 },
-  { week: "W5", value: 76 },
-  { week: "W6", value: 73 },
-  { week: "W7", value: 77 },
-  { week: "W8", value: 78 },
-];
-
-const lmsData = [
-  { week: "W1", value: 52 },
-  { week: "W2", value: 48 },
-  { week: "W3", value: 44 },
-  { week: "W4", value: 51 },
-  { week: "W5", value: 59 },
-  { week: "W6", value: 64 },
-  { week: "W7", value: 69 },
-  { week: "W8", value: 74 },
-];
-
-const subjects = [
-  {
-    name: "Database Management Systems",
-    code: "CS401",
-    score: 86,
-    attendance: 85.7,
-    trend: "up",
-  },
-  {
-    name: "Operating Systems",
-    code: "CS402",
-    score: 74,
-    attendance: 77.5,
-    trend: "up",
-  },
-  {
-    name: "Computer Networks",
-    code: "CS403",
-    score: 81,
-    attendance: 92.1,
-    trend: "up",
-  },
-  {
-    name: "Software Engineering",
-    code: "CS404",
-    score: 79,
-    attendance: 88.4,
-    trend: "down",
-  },
-];
+import { studentService } from "../services/studentService";
+import LoadingState from "../components/LoadingState";
+import ErrorState from "../components/ErrorState";
 
 function Progress() {
+  const [attendance, setAttendance] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [lmsActivity, setLmsActivity] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadProgress = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [attendanceData, assignmentData, quizData, lmsData] =
+        await Promise.all([
+          studentService.getAttendance(),
+          studentService.getAssignments(),
+          studentService.getQuizResults(),
+          studentService.getLmsActivity(),
+        ]);
+
+      setAttendance(attendanceData || []);
+      setAssignments(assignmentData || []);
+      setQuizzes(quizData || []);
+      setLmsActivity(lmsData || []);
+    } catch (err) {
+      setError(err.message || "Unable to load progress.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProgress();
+  }, [loadProgress]);
+
+  const attendanceAverage = useMemo(() => {
+    if (!attendance.length) return 0;
+
+    const totalHeld = attendance.reduce(
+      (sum, item) => sum + Number(item.classesHeld || 0),
+      0,
+    );
+
+    const totalAttended = attendance.reduce(
+      (sum, item) => sum + Number(item.classesAttended || 0),
+      0,
+    );
+
+    return totalHeld ? ((totalAttended / totalHeld) * 100).toFixed(1) : 0;
+  }, [attendance]);
+
+  const quizAverage = useMemo(() => {
+    if (!quizzes.length) return 0;
+
+    const totalMarks = quizzes.reduce(
+      (sum, item) => sum + Number(item.marks || 0),
+      0,
+    );
+
+    const totalMax = quizzes.reduce(
+      (sum, item) => sum + Number(item.maxMarks || 0),
+      0,
+    );
+
+    return totalMax ? ((totalMarks / totalMax) * 100).toFixed(0) : 0;
+  }, [quizzes]);
+
+  const submittedAssignments = assignments.filter(
+    (item) => item.status === "submitted",
+  ).length;
+
+  const totalLmsMinutes = lmsActivity.reduce(
+    (sum, item) => sum + Number(item.minutes || 0),
+    0,
+  );
+
+  if (loading) {
+    return <LoadingState message="Loading your progress..." />;
+  }
+
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load progress"
+        message={error}
+        onRetry={loadProgress}
+      />
+    );
+  }
+
   return (
     <div className="progress-page">
-      {/* Header */}
-      <section className="progress-intro">
+      {/* HEADER */}
+
+      <div className="progress-header">
         <div>
-          <div className="progress-label">
-            <TrendingUp size={14} />
-            ACADEMIC JOURNEY
-          </div>
+          <span className="progress-eyebrow">ACADEMIC PERFORMANCE</span>
 
-          <h2>Your progress at a glance.</h2>
+          <h1>My Progress</h1>
 
-          <p>Track how your academic activity is changing over time.</p>
+          <p>
+            A detailed view of your attendance, assessments and learning
+            activity.
+          </p>
         </div>
 
-        <button className="period-button">
-          <CalendarDays size={15} />
-          Last 8 weeks
-        </button>
-      </section>
-
-      {/* Summary */}
-      <section className="progress-summary">
-        <div className="progress-summary-card">
-          <div className="progress-summary-icon">
-            <Target size={18} />
-          </div>
-
-          <div>
-            <span>Overall performance</span>
-            <strong>82%</strong>
-          </div>
-
-          <div className="progress-change">
-            <TrendingUp size={13} />
-            +6.4%
-          </div>
+        <div className="progress-trend">
+          <ArrowUpRight size={15} />
+          Improving
         </div>
+      </div>
 
-        <div className="progress-summary-card">
-          <div className="progress-summary-icon">
-            <CalendarDays size={18} />
-          </div>
+      {/* SUMMARY */}
 
-          <div>
-            <span>Attendance</span>
-            <strong>84.6%</strong>
-          </div>
-
-          <div className="progress-change">
-            <TrendingUp size={13} />
-            +3.2%
-          </div>
-        </div>
-
-        <div className="progress-summary-card">
-          <div className="progress-summary-icon">
-            <BookOpen size={18} />
-          </div>
-
-          <div>
-            <span>Quiz average</span>
-            <strong>78%</strong>
-          </div>
-
-          <div className="progress-change">
-            <TrendingUp size={13} />
-            +4.5%
-          </div>
-        </div>
-
-        <div className="progress-summary-card">
-          <div className="progress-summary-icon">
-            <Activity size={18} />
-          </div>
-
-          <div>
-            <span>LMS engagement</span>
-            <strong>74%</strong>
-          </div>
-
-          <div className="progress-change">
-            <TrendingUp size={13} />
-            +11%
-          </div>
-        </div>
-      </section>
-
-      {/* Charts */}
-      <section className="progress-charts">
-        <ProgressChart
-          title="Attendance trend"
-          subtitle="Weekly attendance percentage"
-          data={attendanceData}
-          suffix="%"
-          colorClass="chart-green"
+      <div className="progress-summary-grid">
+        <ProgressCard
+          icon={Activity}
+          value={`${attendanceAverage}%`}
+          label="Overall Attendance"
         />
 
-        <ProgressChart
-          title="Quiz performance"
-          subtitle="Average weekly quiz score"
-          data={quizData}
-          suffix="%"
-          colorClass="chart-green"
+        <ProgressCard
+          icon={TrendingUp}
+          value={`${quizAverage}%`}
+          label="Quiz Average"
         />
 
-        <ProgressChart
-          title="LMS engagement"
-          subtitle="Learning activity over time"
-          data={lmsData}
-          suffix="%"
-          colorClass="chart-green"
+        <ProgressCard
+          icon={ClipboardCheck}
+          value={`${submittedAssignments}/${assignments.length}`}
+          label="Assignments Submitted"
         />
+
+        <ProgressCard
+          icon={BookOpen}
+          value={`${totalLmsMinutes}m`}
+          label="LMS Activity This Week"
+        />
+      </div>
+
+      {/* ATTENDANCE */}
+
+      <section className="progress-section">
+        <div className="progress-section-heading">
+          <div>
+            <span>ATTENDANCE</span>
+            <h2>Subject-wise attendance</h2>
+          </div>
+
+          <div className="target-badge">Target: 85%</div>
+        </div>
+
+        <div className="attendance-table">
+          <div className="attendance-table-head">
+            <span>SUBJECT</span>
+            <span>HELD</span>
+            <span>ATTENDED</span>
+            <span>ATTENDANCE</span>
+            <span>STATUS</span>
+          </div>
+
+          {attendance.map((item) => {
+            const percentage = Number(item.percentage || 0);
+
+            const good = percentage >= 85;
+
+            return (
+              <div className="attendance-row" key={item.subjectCode}>
+                <div className="subject-cell">
+                  <strong>{item.subjectCode}</strong>
+                  <span>{item.subjectName}</span>
+                </div>
+
+                <span>{item.classesHeld}</span>
+
+                <span>{item.classesAttended}</span>
+
+                <div className="attendance-progress-cell">
+                  <div className="attendance-percentage">
+                    {percentage.toFixed(1)}%
+                  </div>
+
+                  <div className="mini-progress">
+                    <div
+                      style={{
+                        width: `${Math.min(percentage, 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <span
+                  className={`attendance-status ${good ? "good" : "warning"}`}
+                >
+                  {good ? "On track" : "Needs attention"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
-      {/* Subject performance */}
-      <section className="progress-card">
-        <div className="progress-card-heading">
+      {/* QUIZZES */}
+
+      <section className="progress-section">
+        <div className="progress-section-heading">
           <div>
-            <h3>Subject performance</h3>
-            <p>Current performance across your subjects</p>
+            <span>ASSESSMENTS</span>
+            <h2>Recent quiz results</h2>
           </div>
         </div>
 
-        <div className="subject-list">
-          {subjects.map((subject) => (
-            <div className="subject-row" key={subject.code}>
-              <div className="subject-name">
-                <div className="subject-code">{subject.code}</div>
+        <div className="quiz-grid">
+          {quizzes.map((quiz) => {
+            const percentage =
+              (Number(quiz.marks) / Number(quiz.maxMarks)) * 100;
 
-                <div>
-                  <strong>{subject.name}</strong>
-                  <span>Attendance {subject.attendance}%</span>
+            return (
+              <div
+                className="quiz-card"
+                key={`${quiz.subjectCode}-${quiz.quizName}`}
+              >
+                <div className="quiz-icon">
+                  <CheckCircle2 size={15} />
+                </div>
+
+                <div className="quiz-info">
+                  <span>{quiz.subjectName}</span>
+
+                  <strong>{quiz.quizName}</strong>
+                </div>
+
+                <div className="quiz-score">
+                  <strong>
+                    {quiz.marks}/{quiz.maxMarks}
+                  </strong>
+
+                  <span>{percentage.toFixed(0)}%</span>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </section>
 
-              <div className="subject-progress">
-                <div className="subject-progress-bar">
-                  <span
+      {/* LMS */}
+
+      <section className="progress-section">
+        <div className="progress-section-heading">
+          <div>
+            <span>LMS ENGAGEMENT</span>
+            <h2>Weekly activity</h2>
+          </div>
+
+          <span className="lms-total">{totalLmsMinutes} minutes</span>
+        </div>
+
+        <div className="lms-chart">
+          {lmsActivity.map((item) => {
+            const maxMinutes = Math.max(
+              ...lmsActivity.map((activity) => Number(activity.minutes) || 0),
+            );
+
+            const height = maxMinutes ? (item.minutes / maxMinutes) * 100 : 0;
+
+            return (
+              <div className="lms-day" key={item.date}>
+                <div className="lms-bar-container">
+                  <div
+                    className="lms-bar"
                     style={{
-                      width: `${subject.score}%`,
+                      height: `${height}%`,
                     }}
+                    title={`${item.minutes} minutes`}
                   />
                 </div>
 
-                <strong>{subject.score}%</strong>
+                <strong>{item.minutes}m</strong>
+
+                <span>{item.date}</span>
               </div>
-
-              <div
-                className={`subject-trend ${
-                  subject.trend === "up" ? "trend-up" : "trend-down"
-                }`}
-              >
-                {subject.trend === "up" ? (
-                  <TrendingUp size={14} />
-                ) : (
-                  <TrendingDown size={14} />
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Improvements */}
-      <section className="progress-insights-grid">
-        <div className="progress-card">
-          <div className="progress-card-heading">
-            <div>
-              <h3>What's improving</h3>
-              <p>Positive changes in recent weeks</p>
-            </div>
-
-            <CheckCircle2 size={18} className="heading-success" />
-          </div>
-
-          <div className="improvement-list">
-            <div className="improvement-item">
-              <span className="improvement-dot" />
-
-              <div>
-                <strong>LMS engagement</strong>
-                <span>Increased by 11% over the last 4 weeks.</span>
-              </div>
-
-              <b>+11%</b>
-            </div>
-
-            <div className="improvement-item">
-              <span className="improvement-dot" />
-
-              <div>
-                <strong>Attendance</strong>
-                <span>Improved steadily since week 4.</span>
-              </div>
-
-              <b>+6%</b>
-            </div>
-
-            <div className="improvement-item">
-              <span className="improvement-dot" />
-
-              <div>
-                <strong>Quiz performance</strong>
-                <span>Your average has increased this month.</span>
-              </div>
-
-              <b>+4.5%</b>
-            </div>
-          </div>
-        </div>
-
-        <div className="progress-card">
-          <div className="progress-card-heading">
-            <div>
-              <h3>Area to watch</h3>
-              <p>Something worth paying attention to</p>
-            </div>
-
-            <TrendingDown size={18} className="heading-warning" />
-          </div>
-
-          <div className="watch-area">
-            <div className="watch-icon">
-              <CalendarDays size={20} />
-            </div>
-
-            <div>
-              <strong>Operating Systems attendance</strong>
-
-              <p>
-                Your attendance is currently 77.5%. Attending upcoming lectures
-                could help bring this closer to your 85% target.
-              </p>
-
-              <div className="watch-progress">
-                <span style={{ width: "77.5%" }} />
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </section>
     </div>
   );
 }
 
-function ProgressChart({ title, subtitle, data, suffix, colorClass }) {
-  const max = 100;
-  const min = 0;
-
-  const points = data
-    .map((item, index) => {
-      const x = (index / (data.length - 1)) * 100;
-
-      const y = 100 - ((item.value - min) / (max - min)) * 100;
-
-      return `${x},${y}`;
-    })
-    .join(" ");
-
+function ProgressCard({ icon: Icon, value, label }) {
   return (
-    <div className="progress-card chart-card">
-      <div className="progress-card-heading">
-        <div>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
-        </div>
-
-        <span className="chart-current">
-          {data[data.length - 1].value}
-          {suffix}
-        </span>
+    <div className="progress-stat-card">
+      <div className="progress-stat-icon">
+        <Icon size={16} />
       </div>
 
-      <div className="chart-wrapper">
-        <div className="chart-y-axis">
-          <span>100</span>
-          <span>75</span>
-          <span>50</span>
-          <span>25</span>
-          <span>0</span>
-        </div>
-
-        <div className="chart-area">
-          <div className="chart-grid-lines">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
-
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className={`line-chart ${colorClass}`}
-          >
-            <polyline
-              points={points}
-              fill="none"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {data.map((item, index) => {
-              const x = (index / (data.length - 1)) * 100;
-
-              const y = 100 - (item.value / 100) * 100;
-
-              return (
-                <circle
-                  key={item.week}
-                  cx={x}
-                  cy={y}
-                  r="1.5"
-                  vectorEffect="non-scaling-stroke"
-                />
-              );
-            })}
-          </svg>
-
-          <div className="chart-labels">
-            {data.map((item) => (
-              <span key={item.week}>{item.week}</span>
-            ))}
-          </div>
-        </div>
+      <div>
+        <strong>{value}</strong>
+        <span>{label}</span>
       </div>
     </div>
   );

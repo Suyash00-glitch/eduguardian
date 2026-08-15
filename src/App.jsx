@@ -1,61 +1,96 @@
-import React, { useState } from "react";
-import Sidebar from "./components/Sidebar.jsx";
-import Topbar from "./components/Topbar.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import Progress from "./pages/Progress.jsx";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "./context/ThemeContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
-function App() {
-  const [activePage, setActivePage] = useState("dashboard");
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Progress from "./pages/Progress";
+import Insights from "./pages/Insights";
+import Recovery from "./pages/Recovery";
+import Coach from "./pages/Coach";
+import Goals from "./pages/Goals";
+import Notifications from "./pages/Notifications";
+import ProtectedRoute from "./components/ProtectedRoute";
+import StudentLayout from "./components/StudentLayout";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 
-  const renderPage = () => {
-    switch (activePage) {
-      case "dashboard":
-        return <Dashboard />;
+function AppRoutes() {
+  const { isAuthenticated, loading } = useAuth();
 
-      case "progress":
-        return <Progress />;
-
-      default:
-        return (
-          <div className="placeholder-page">
-            <div className="placeholder-icon">✦</div>
-
-            <h2>{getPageName(activePage)}</h2>
-
-            <p>This section will be built next.</p>
-          </div>
-        );
-    }
-  };
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner" />
+        <span>Loading EduGuardian...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="app-shell">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} />
+    <Routes>
+      {/* PUBLIC */}
 
-      <div className="main-area">
-        <Topbar activePage={activePage} setActivePage={setActivePage} />
+      <Route
+        path="/login"
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />
+        }
+      />
 
-        <main className="page-content">{renderPage()}</main>
-      </div>
-    </div>
+      {/* PROTECTED */}
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<StudentLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+
+          <Route path="/progress" element={<Progress />} />
+
+          <Route path="/insights" element={<Insights />} />
+
+          <Route path="/recovery" element={<Recovery />} />
+
+          <Route path="/coach" element={<Coach />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/goals" element={<Goals />} />
+          <Route path="/profile" element={<Profile />} />
+
+          <Route path="/settings" element={<Settings />} />
+        </Route>
+      </Route>
+
+      {/* DEFAULT */}
+
+      <Route
+        path="/"
+        element={
+          <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+        }
+      />
+
+      {/* UNKNOWN ROUTE */}
+
+      <Route
+        path="*"
+        element={
+          <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+        }
+      />
+    </Routes>
   );
 }
 
-function getPageName(page) {
-  const names = {
-    dashboard: "Dashboard",
-    progress: "My Progress",
-    insights: "My Insights",
-    recovery: "Recovery Plan",
-    coach: "AI Coach",
-    goals: "Goals",
-    resources: "Resources",
-    notifications: "Notifications",
-    profile: "Profile",
-    settings: "Settings",
-  };
-
-  return names[page] || "Dashboard";
+function App() {
+  return (
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
 }
 
 export default App;

@@ -1,100 +1,116 @@
 import React from "react";
-import { Search, Bell, Sparkles } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Bell, Search, ChevronDown, User, LogOut } from "lucide-react";
 
-const pageInfo = {
-  dashboard: {
+import { useAuth } from "../context/AuthContext";
+
+const pageTitles = {
+  "/dashboard": {
     title: "Dashboard",
     subtitle: "Your academic overview",
   },
-
-  progress: {
+  "/progress": {
     title: "My Progress",
-    subtitle: "Track your academic journey",
+    subtitle: "Track your academic performance",
   },
-
-  insights: {
+  "/insights": {
     title: "My Insights",
-    subtitle: "Understand your academic patterns",
+    subtitle: "Understand your academic signals",
   },
-
-  recovery: {
+  "/recovery": {
     title: "Recovery Plan",
-    subtitle: "Your personalized path forward",
+    subtitle: "Your personalized academic action plan",
   },
-
-  coach: {
+  "/coach": {
     title: "AI Coach",
-    subtitle: "Your academic support assistant",
+    subtitle: "Personalized academic guidance",
   },
-
-  goals: {
+  "/goals": {
     title: "Goals",
-    subtitle: "Set and track your targets",
+    subtitle: "Track your academic goals",
   },
-
-  resources: {
+  "/resources": {
     title: "Resources",
-    subtitle: "Support available to you",
+    subtitle: "Academic and campus support",
   },
-
-  notifications: {
+  "/notifications": {
     title: "Notifications",
     subtitle: "Your latest updates",
   },
-
-  profile: {
+  "/profile": {
     title: "Profile",
     subtitle: "Your student information",
   },
-
-  settings: {
+  "/settings": {
     title: "Settings",
     subtitle: "Manage your preferences",
   },
 };
 
-function Topbar({ activePage, setActivePage }) {
-  const current = pageInfo[activePage] || pageInfo.dashboard;
+function Topbar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const { user, logout } = useAuth();
+
+  const currentPage = pageTitles[location.pathname] || pageTitles["/dashboard"];
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <header className="topbar">
-      <div className="page-heading">
-        <h1>{current.title}</h1>
+      {/* Page information */}
 
-        <p>{current.subtitle}</p>
+      <div className="topbar-page">
+        <h1>{currentPage.title}</h1>
+
+        <span>{currentPage.subtitle}</span>
       </div>
 
+      {/* Actions */}
+
       <div className="topbar-actions">
-        <button className="search-button">
-          <Search size={17} />
-
-          <span>Search</span>
-
-          <kbd>Ctrl K</kbd>
-        </button>
+        {/* Search */}
 
         <button
-          className="icon-button"
-          onClick={() => setActivePage("notifications")}
+          className="topbar-icon-button"
+          aria-label="Search"
+          onClick={() => {
+            // Search will be connected later.
+          }}
         >
-          <Bell size={18} />
-
-          <span className="notification-dot" />
+          <Search size={17} />
         </button>
 
-        <button className="coach-button" onClick={() => setActivePage("coach")}>
-          <Sparkles size={16} />
+        {/* Notifications */}
 
-          <span>AI Coach</span>
+        <button
+          className="topbar-icon-button notification-button"
+          aria-label="Notifications"
+          onClick={() => navigate("/notifications")}
+        >
+          <Bell size={17} />
+
+          <span className="topbar-notification-dot" />
         </button>
 
-        <button className="profile-button">
-          <div className="topbar-avatar">P</div>
+        {/* Profile */}
+
+        <button className="topbar-profile" onClick={() => navigate("/profile")}>
+          <div className="topbar-avatar">
+            {user?.full_name?.charAt(0) || "P"}
+          </div>
 
           <div className="topbar-user">
-            <strong>Pratham</strong>
-            <span>Student</span>
+            <strong>{user?.full_name || "Student"}</strong>
+
+            <span>{user?.usn || "Student"}</span>
           </div>
+
+          <ChevronDown size={14} />
         </button>
       </div>
     </header>

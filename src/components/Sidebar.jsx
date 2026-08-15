@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -14,39 +15,41 @@ import {
   GraduationCap,
 } from "lucide-react";
 
+import { useAuth } from "../context/AuthContext";
+
 const mainItems = [
   {
-    id: "dashboard",
+    path: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
   },
   {
-    id: "progress",
+    path: "/progress",
     label: "My Progress",
     icon: TrendingUp,
   },
   {
-    id: "insights",
+    path: "/insights",
     label: "My Insights",
     icon: Lightbulb,
   },
   {
-    id: "recovery",
+    path: "/recovery",
     label: "Recovery Plan",
     icon: ClipboardCheck,
   },
   {
-    id: "coach",
+    path: "/coach",
     label: "AI Coach",
     icon: MessageCircle,
   },
   {
-    id: "goals",
+    path: "/goals",
     label: "Goals",
     icon: Target,
   },
   {
-    id: "resources",
+    path: "/resources",
     label: "Resources",
     icon: BookOpen,
   },
@@ -54,26 +57,44 @@ const mainItems = [
 
 const accountItems = [
   {
-    id: "notifications",
+    path: "/notifications",
     label: "Notifications",
     icon: Bell,
+    badge: 3,
   },
   {
-    id: "profile",
+    path: "/profile",
     label: "Profile",
     icon: User,
   },
   {
-    id: "settings",
+    path: "/settings",
     label: "Settings",
     icon: Settings,
   },
 ];
 
-function Sidebar({ activePage, setActivePage }) {
+function Sidebar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const { user, logout } = useAuth();
+
+  const activePage = location.pathname.split("/")[1] || "dashboard";
+
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <aside className="sidebar">
-      {/* Brand */}
+      {/* BRAND */}
+
       <div className="sidebar-brand">
         <div className="brand-icon">
           <GraduationCap size={20} />
@@ -86,30 +107,48 @@ function Sidebar({ activePage, setActivePage }) {
         </div>
       </div>
 
-      {/* Student */}
-      <div className="student-card">
-        <div className="student-avatar">P</div>
+      {/* STUDENT */}
+
+      <div
+        className="student-card"
+        onClick={() => navigate("/profile")}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            navigate("/profile");
+          }
+        }}
+      >
+        <div className="student-avatar">
+          {user?.full_name?.charAt(0) || "P"}
+        </div>
 
         <div className="student-info">
-          <strong>Pratham</strong>
-          <span>4NM24IS001</span>
+          <strong>{user?.full_name || "Student"}</strong>
+
+          <span>{user?.usn || "Student ID"}</span>
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* NAVIGATION */}
+
       <nav className="sidebar-navigation">
+        {/* MAIN */}
+
         <div className="navigation-section">
           <div className="navigation-label">MAIN</div>
 
           {mainItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
 
             return (
               <button
-                key={item.id}
-                className={`sidebar-item ${isActive ? "active" : ""}`}
-                onClick={() => setActivePage(item.id)}
+                key={item.path}
+                className={`sidebar-item ${
+                  isActive(item.path) ? "active" : ""
+                }`}
+                onClick={() => navigate(item.path)}
               >
                 <Icon size={18} />
 
@@ -119,25 +158,28 @@ function Sidebar({ activePage, setActivePage }) {
           })}
         </div>
 
+        {/* ACCOUNT */}
+
         <div className="navigation-section account-section">
           <div className="navigation-label">ACCOUNT</div>
 
           {accountItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
 
             return (
               <button
-                key={item.id}
-                className={`sidebar-item ${isActive ? "active" : ""}`}
-                onClick={() => setActivePage(item.id)}
+                key={item.path}
+                className={`sidebar-item ${
+                  isActive(item.path) ? "active" : ""
+                }`}
+                onClick={() => navigate(item.path)}
               >
                 <Icon size={18} />
 
                 <span>{item.label}</span>
 
-                {item.id === "notifications" && (
-                  <span className="notification-count">3</span>
+                {item.badge && (
+                  <span className="notification-count">{item.badge}</span>
                 )}
               </button>
             );
@@ -145,16 +187,22 @@ function Sidebar({ activePage, setActivePage }) {
         </div>
       </nav>
 
-      {/* Bottom */}
+      {/* BOTTOM */}
+
       <div className="sidebar-bottom">
         <div className="academic-info">
-          <span>Information Science</span>
+          <span>{user?.department || "Information Science"}</span>
 
-          <strong>Semester 4 · Section A</strong>
+          <strong>
+            Semester {user?.semester || 4}
+            {" · "}
+            {user?.section || "A"}
+          </strong>
         </div>
 
-        <button className="logout-button">
+        <button className="logout-button" onClick={handleLogout}>
           <LogOut size={17} />
+
           <span>Sign out</span>
         </button>
       </div>
