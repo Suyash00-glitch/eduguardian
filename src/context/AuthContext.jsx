@@ -6,7 +6,18 @@ import {
   logoutUser,
 } from "../services/authService";
 
+import { demoStudent } from "../services/demoData";
+
 const AuthContext = createContext(null);
+
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
+const demoUser = {
+  ...demoStudent,
+  full_name: demoStudent.name,
+};
+
+const DEMO_TOKEN = "demo-token";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -16,6 +27,13 @@ export function AuthProvider({ children }) {
   const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      setUser(demoUser);
+      setToken(DEMO_TOKEN);
+      setLoading(false);
+      return;
+    }
+
     const session = getStoredSession();
 
     if (session) {
@@ -30,6 +48,18 @@ export function AuthProvider({ children }) {
     setLoginLoading(true);
 
     try {
+      if (DEMO_MODE) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        setUser(demoUser);
+        setToken(DEMO_TOKEN);
+
+        return {
+          success: true,
+          user: demoUser,
+        };
+      }
+
       const session = await loginUser(identifier, password, rememberMe);
 
       setUser(session.user);
@@ -50,7 +80,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    logoutUser();
+    if (!DEMO_MODE) {
+      logoutUser();
+    }
 
     setUser(null);
     setToken(null);

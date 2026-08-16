@@ -1,72 +1,52 @@
-const DEMO_USER = {
-  id: "STU-DEMO-001",
-  full_name: "Pratham",
-  email: "student@eduguardian.ai",
-  role: "student",
-  usn: "DEMOUSN001",
-  department: "Information Science and Engineering",
-  semester: 4,
-  section: "A",
-};
-
-const DEMO_PASSWORD = "student123";
+const API_URL = "http://localhost:8000";
 
 const TOKEN_KEY = "eduguardian_token";
 const USER_KEY = "eduguardian_user";
 
-export const loginUser = async (identifier, password, rememberMe = false) => {
-  /*
-   * DEMO ONLY
-   *
-   * BACKEND REPLACEMENT:
-   * Replace this function with:
-   *
-   * POST /api/auth/login
-   *
-   * Expected response:
-   * {
-   *   token: "...",
-   *   user: {
-   *     id,
-   *     full_name,
-   *     email,
-   *     role,
-   *     ...
-   *   }
-   * }
-   */
+export const loginUser = async (email, password, rememberMe = false) => {
+  const response = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
 
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  const data = await response.json();
 
-  const validIdentifier =
-    identifier.toLowerCase() === DEMO_USER.email.toLowerCase() ||
-    identifier.toLowerCase() === DEMO_USER.usn.toLowerCase();
-
-  if (!validIdentifier || password !== DEMO_PASSWORD) {
-    throw new Error("Invalid email/USN or password.");
+  if (!response.ok) {
+    throw new Error(data.detail || "Invalid email or password.");
   }
 
-  const token = "demo-token-eduguardian";
+  const token = data.access_token;
+  const user = data.user;
 
-  const session = {
-    token,
-    user: DEMO_USER,
-  };
+  if (!token || !user) {
+    throw new Error("Invalid login response from server.");
+  }
 
   const storage = rememberMe ? localStorage : sessionStorage;
 
   storage.setItem(TOKEN_KEY, token);
-  storage.setItem(USER_KEY, JSON.stringify(DEMO_USER));
+  storage.setItem(USER_KEY, JSON.stringify(user));
 
-  return session;
+  return {
+    token,
+    user,
+  };
 };
 
 export const getStoredSession = () => {
   const token =
-    localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    localStorage.getItem(TOKEN_KEY) ||
+    sessionStorage.getItem(TOKEN_KEY);
 
   const userData =
-    localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
+    localStorage.getItem(USER_KEY) ||
+    sessionStorage.getItem(USER_KEY);
 
   if (!token || !userData) {
     return null;
@@ -92,7 +72,10 @@ export const logoutUser = () => {
 };
 
 export const getAuthToken = () => {
-  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  return (
+    localStorage.getItem(TOKEN_KEY) ||
+    sessionStorage.getItem(TOKEN_KEY)
+  );
 };
 
 function clearSession() {

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   TrendingUp,
+  ClipboardList,
   Lightbulb,
   ClipboardCheck,
   MessageCircle,
@@ -27,6 +28,11 @@ const mainItems = [
     path: "/progress",
     label: "My Progress",
     icon: TrendingUp,
+  },
+  {
+    path: "/assignments",
+    label: "Assignments",
+    icon: ClipboardList,
   },
   {
     path: "/insights",

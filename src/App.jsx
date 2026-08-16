@@ -3,9 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
+import Resources from "./pages/Resources";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Progress from "./pages/Progress";
+import Assignments from "./pages/Assignments";
+import AssignmentDetails from "./pages/AssignmentDetails";
 import Insights from "./pages/Insights";
 import Recovery from "./pages/Recovery";
 import Coach from "./pages/Coach";
@@ -46,7 +49,12 @@ function AppRoutes() {
           <Route path="/dashboard" element={<Dashboard />} />
 
           <Route path="/progress" element={<Progress />} />
+          <Route
+            path="/assignments/:assignmentId"
+            element={<AssignmentDetails />}
+          />
 
+          <Route path="/assignments" element={<Assignments />} />
           <Route path="/insights" element={<Insights />} />
 
           <Route path="/recovery" element={<Recovery />} />
@@ -54,6 +62,7 @@ function AppRoutes() {
           <Route path="/coach" element={<Coach />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/goals" element={<Goals />} />
+          <Route path="/resources" element={<Resources />} />
           <Route path="/profile" element={<Profile />} />
 
           <Route path="/settings" element={<Settings />} />

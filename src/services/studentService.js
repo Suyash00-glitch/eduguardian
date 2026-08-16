@@ -91,6 +91,43 @@ export const studentService = {
     };
   },
 
+  
+
+    // RESOURCES
+  async getResources() {
+    const token =
+      localStorage.getItem("eduguardian_token") ||
+      sessionStorage.getItem("eduguardian_token");
+
+    const response = await fetch(
+      "http://localhost:8000/api/interventions/resources",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "Unable to load resources."
+      );
+    }
+
+    return data;
+  },
+
+
+
+
+
+
+
+
+
   // NOTIFICATIONS
   async getNotifications() {
     await wait();
