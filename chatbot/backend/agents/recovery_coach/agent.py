@@ -236,11 +236,13 @@ class RecoveryCoachAgent:
             token_limit = 350
 
         try:
+            # Provide at least 300 max_tokens to accommodate model reasoning/thinking tokens
+            actual_max_tokens = max(token_limit, 300)
             raw_text = await self._llm_client.complete_simple(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=call_temp,
-                max_tokens=token_limit,
+                max_tokens=actual_max_tokens,
             )
 
             # Sanitize and validate response format
@@ -250,6 +252,9 @@ class RecoveryCoachAgent:
                 constraints=constraints,
                 user_facts=user_facts,
             )
+
+            if not validated_text.strip():
+                validated_text = self._build_contextual_fallback(user_message, request.student_context)
 
             logger.info("RecoveryCoachAgent: Generated response (%d chars, validated to %d chars)", len(safe_text), len(validated_text))
 

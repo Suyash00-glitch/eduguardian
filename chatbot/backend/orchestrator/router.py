@@ -321,6 +321,12 @@ _GENERAL_STUDENT_PATTERNS = re.compile(
     r"feeling\s+overwhelmed|feel\s+overwhelmed|stressed\s+about\s+studies|"
     r"anxious\s+about\s+exams?|exam\s+anxiety|study\s+anxiety|"
     r"doubt\s+myself|self[\s-]doubt|confidence\s+in\s+studying|"
+    r"scared\s+of\s+(?:getting\s+|being\s+)?(?:rejected|judged|left\s+out)|"
+    r"fear\s+of\s+(?:rejection|being\s+rejected|failure)|"
+    r"afraid\s+of\s+(?:rejection|being\s+rejected)|"
+    r"love\s+myself\s+but|"
+    r"why\s+(?:dint|didn'?t)\s+you\s+(?:answer|reply|respond)|"
+    r"you\s+didn'?t\s+answer|"
     r"why\s+(?:am\s+i|i\s+am)\s+here"
     r")\b",
     re.IGNORECASE,

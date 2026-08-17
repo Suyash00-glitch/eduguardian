@@ -168,7 +168,7 @@ class OmniRouteLLMClient(BaseLLMClient):
 
         clean_groq_primary = self._groq_model.split("groq/")[-1] if self._groq_model.startswith("groq/") else self._groq_model
         groq_models = [clean_groq_primary]
-        for fallback_m in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]:
+        for fallback_m in ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b"]:
             clean_m = fallback_m.split("groq/")[-1] if fallback_m.startswith("groq/") else fallback_m
             if clean_m not in groq_models:
                 groq_models.append(clean_m)

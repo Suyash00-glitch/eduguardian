@@ -589,7 +589,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     is_general_student = has_student_kw and has_inquiry_marker
 
     # Greeting detection: MUST be an explicit greeting and NOT a question
-    is_greeting = bool(re.search(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening))\b", msg_l)) and not (msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math)
+    is_greeting = bool(re.search(r"^(?:hi|hii+|hello|helo|hlo|hey|heyy+|yo|hola|howdy|sup|what'?s\s+up|good\s+(?:morning|afternoon|evening))\b", msg_l)) and not (msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math)
 
     # 3. Determine whether academic context should be injected
     needs_academic_context = (
@@ -775,14 +775,15 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
                 "Respond with the direct answer:"
             )
 
-    # 7. Greeting (e.g. "hii", "hello my name is ajmal")
+    # 7. Greeting (e.g. "hi", "hii", "hello", "hlo", "hey buddy", "what's up")
     elif is_greeting:
         name_target = f" {resolved_name}" if resolved_name else ""
         sections.append(
             f"\n[RESPONSE INSTRUCTION — CONVERSATIONAL GREETING]\n"
-            f"• Greet the student warmly: \"Hi{name_target}! How can I help you today?\"\n"
+            f"• Greet the student warmly, naturally, and supportively (e.g., \"Hey{name_target}! 👋 Great to connect. How's everything going with your studies today, or what would you like to explore?\" or \"Hi{name_target}! 😊 Ready to learn something new, work on a study plan, or just chat? What's on your mind?\").\n"
+            f"• Keep the tone warm, welcoming, and conversational.\n"
+            f"• Avoid cold, robotic responses like 'What can I help you with?' or 'How can I assist?'.\n"
             f"• DO NOT generate an unsolicited study plan or academic analysis.\n"
-            f"• Keep it under 15 words.\n"
             "Respond as EduGuardian:"
         )
 
