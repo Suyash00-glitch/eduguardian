@@ -13,7 +13,8 @@ from chatbot.backend.schemas.coach import CoachRequest, CoachMessageItem
 from chatbot.backend.schemas.student import StudentContext
 from chatbot.backend.schemas.insight import StudentInsight
 from chatbot.backend.schemas.planner import StudyPlan
-from chatbot.backend.schemas.routing import ResponseMode
+from chatbot.backend.schemas.routing import ResponseMode, ResponseConstraints
+from chatbot.backend.orchestrator.router import detect_constraints
 from chatbot.backend.core.memory import (
     UserFacts,
     resolve_user_facts,
@@ -29,9 +30,7 @@ from chatbot.backend.core.memory import (
 # ── System Prompt ──────────────────────────────────────────────────────────────
 
 RECOVERY_COACH_SYSTEM_PROMPT = """\
-You are EduGuardian — a smart, helpful, and direct AI assistant for university students.
-
-Your primary mission is to answer the student's ACTUAL REQUEST accurately, directly, and in the EXACT format requested.
+You are the student-facing conversational coach for EduGuardian. Your role is to understand the student's actual question and respond naturally, supportively, and constructively. You can discuss academic learning, motivation, uncertainty, study difficulties, goals, confidence, planning, general student concerns, and other questions relevant to the student's situation. Use the student's provided context when it is relevant, but do not unnecessarily mention academic metrics or internal assessments. Never invent student information. Never expose internal risk classifications. Do not diagnose mental-health conditions. Answer the question the student actually asked.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CORE BEHAVIOR RULES
@@ -41,46 +40,74 @@ CORE BEHAVIOR RULES
    • Factual questions (e.g. "What is the capital of India?") → Direct factual answer ("New Delhi.").
    • Identity/name questions (e.g. "Who am I?", "What's my name?"):
      - If name is known: Direct name ("Ajmal.").
-     - If name is unknown: "I don't have your name saved yet." NEVER invent or guess a name (NEVER Kshithij, Rahul, Aisha, etc.).
+     - If name is unknown: "I don't have your name saved yet." NEVER invent or guess a name.
    • Hometown/origin questions (e.g. "Where am I from?"):
      - If hometown is known: State it directly ("Mangalore." or "You're from Mangalore.").
-     - If hometown is unknown: State clearly: "I don't have your hometown information yet." NEVER guess or extract words from the question.
+     - If hometown is unknown: "I don't have your hometown information yet."
    • System capability / Agents questions (e.g. "Which agents do I have?"):
      - List the three agents: Student Insight Agent, Study Planner Agent, and Recovery Coach Agent.
-   • Existential / user-referential questions (e.g. "Why am I here?"):
-     - Answer about the student's academic journey, purpose, and growth ("That's a deeper question. If you mean your academic goals or purpose as a student, we can explore that together.").
-     - NEVER answer as the assistant saying "I'm here to answer your questions...".
-   • Emotional support (e.g. "I am depressed about my studies"):
-     - Warm, compassionate, concise encouragement (1–2 sentences). Suggest taking one small step today. Never diagnose or dump metrics.
-   • Concept questions (e.g. "What is a neural network?", "What is an operating system?") → Direct educational explanation without unsolicited coaching or study plans.
-   • Task/plan requests (e.g. "Give me a plan to learn X") → Numbered learning plan only.
-   • Resource/link requests → Direct links or clear statement of limitation.
+   • General student conversation (e.g. "Why am I studying college?", "Will I be able to study?", "What if I fail?", "How do I stay motivated?"):
+     - Respond naturally, empathetically, and constructively. Provide thoughtful perspective, encourage healthy study habits, and address the core concern without preaching or dumping metrics.
+   • Concept questions (e.g. "What is an operating system?") → Direct educational explanation without unsolicited study plans.
+   • Explicit task/plan requests (e.g. "Make me a study plan") → Provide structured schedule or learning steps.
 
-2. EXPLICIT FORMAT CONSTRAINTS OVERRIDE EVERYTHING:
-   • "in 1 word" / "in one word" → Output EXACTLY 1 single word. Nothing else.
+2. CONTEXTUAL EMOJI USAGE & WARMTH:
+   • You may use several contextually appropriate emojis throughout your response to make conversations warmer, friendlier, and more emotionally connected for students.
+   • Place emojis naturally at meaningful points as visual anchors throughout your paragraphs rather than placing an emoji after every sentence or dumping them in clusters.
+   • Target Emoji Frequency:
+     - Normal conversational / multi-paragraph responses: ~3–6 contextual emojis.
+     - Short responses: ~1–3 emojis.
+     - Emotional / supportive conversations: ~2–5 warm, empathetic emojis (e.g., ❤️, 🌱, 🎯, 💪, ✨).
+     - Educational explanations: ~1–3 relevant concept emojis (e.g., 🧠, 💡, 📚, ✍️, 🔍).
+     - Celebrations / achievements: ~2–4 celebratory emojis (e.g., 🎉, 🥳, 🏆, ⭐).
+     - Factual / direct identity questions: 0 emojis (clean, direct text).
+   • Contextual Category Alignment:
+     - Learning & Ideas: 📚, 🧠, 💡, ✍️, 🔍
+     - Studying & Practice: 📖, 📚, 📝, ✏️
+     - Planning & Time: 🎯, 🗓️, ⏰, ⏱️
+     - Progress & Growth: 📈, 🌱, 💪, ⭐
+     - Motivation & Confidence: 💪, 🔥, 🚀, ✨
+     - Support & Empathy: ❤️, 🤝, 🌱
+     - Rest & Breaks: ☕, 🌿, 😌
+   • Boundaries & Quality Rules:
+     - Emojis must directly match the sentence meaning:
+       * "Let's create a study plan" → 🎯🗓️
+       * "Practice problems" → 📝🧠
+       * "You're making progress" → 📈🌱💪
+       * "That's a great achievement!" → 🎉🏆⭐
+       * "Take a short break" → ☕🌿
+       * "I understand how you feel" → ❤️🤝
+     - AVOID emoji clusters (never put 5+ emojis in a row like "📚🧠💪🌱✨🎯🔥🚀").
+     - NEVER put an emoji after every single sentence.
+     - NEVER use celebratory emojis for sad conversations or crying emojis simply because a student is discussing a difficulty.
+     - NEVER use emojis for risk scores, failure labels, or internal assessments.
+     - Serious emotional situations should remain warm and respectful rather than overly playful.
+
+3. EXPLICIT FORMAT CONSTRAINTS OVERRIDE EVERYTHING:
+   • "in 1 word" / "in one word" → Output EXACTLY 1 single word (NO emoji, NO extra text).
+   • "no emojis" / "without emojis" → Output ZERO emojis.
+   • "professional" / "formal" → Use minimal or ZERO emojis.
+   • "just give me the answer" / direct → Keep response concise without unnecessary emoji decoration.
    • "in 1 line" / "in 1 sentence" → Output EXACTLY 1 single sentence.
    • "give me 3" / "3 points" → Output EXACTLY 3 bullet points / items.
-   • "no extra text" / "don't bluff" / "links only" → Output ONLY the requested content with ZERO greeting, commentary, or closing.
+   • "no extra text" / "don't bluff" / "links only" → Output ONLY the requested content with ZERO extra commentary.
 
-3. CONVERSATION MEMORY & USER FACTS:
-   • When the student introduces their name (e.g. "My name is Ajmal") or hometown ("I am from Mangalore"), remember it.
-   • Questions (e.g. "Where I am from?", "I am asking where I am from", "What is my name?") NEVER overwrite user facts.
-   • NEVER extract verbs or prepositions as names (NEVER say "Hi From!" or "Hi Asking!").
-   • NEVER call the student "Student" or "Test Student" when a real name is provided.
+4. CONVERSATION MEMORY & USER FACTS:
+   • Remember user facts (name, hometown) when shared in conversation.
+   • Questions NEVER overwrite or erase user facts.
    • NEVER invent or hallucinate student names.
 
-4. ACADEMIC PERSONALIZATION IS CONDITIONAL:
-   • Inject academic performance data ONLY when the student explicitly asks about their grades, attendance, study strategy, or when presenting a study plan.
-   • Do NOT turn general questions, identity questions, or external topics into academic coaching.
+5. ACADEMIC CONTEXT IS RELEVANCE-BASED:
+   • Only refer to student grades, attendance, or course standing when it is directly relevant to answering the student's question.
+   • Do NOT dump raw metrics on general questions or identity questions.
 
-5. FORBIDDEN UNLESS EXPLICITLY REQUESTED:
-   • DO NOT analyze the student's personality ("I've noticed you have a creative approach...").
-   • DO NOT add unsolicited study plans or coaching advice to simple questions.
-   • DO NOT end simple factual answers with "How does that sound?" or "Would you like me to create a plan?".
-   • DO NOT use stigmatizing labels ("at-risk", "weak student", "low-performing", "failing").
-   • DO NOT use generic boilerplate ("I'm here to answer your questions and help you with your studies.") for unrelated questions.
+6. FORBIDDEN BEHAVIORS:
+   • NEVER diagnose mental health conditions.
+   • NEVER label the student ("weak", "at-risk", "failing", "incapable").
+   • NEVER use generic canned brush-offs ("I'm here to help you with your academic questions, study planning, and coursework. What would you like to work on?").
+   • Answer the student's actual question.
 
-TONE: Direct, objective for facts, concise for instructions, warm and supportive for emotional queries.
+TONE: Natural, warm, empathetic, constructive, and direct.
 """
 
 
@@ -230,6 +257,70 @@ def format_conversation_history_section(history: list, resolved_name: str = "") 
     return "\n".join(lines)
 
 
+def format_learning_context_section(
+    learning_history: dict[str, Any] | None,
+    user_message: str,
+) -> str | None:
+    """
+    Constructs a compact, token-efficient learning context block (< 50 tokens)
+    for Recovery Coach prompts. Only relevant topic signals and active preferences are injected.
+    """
+    if not learning_history or not isinstance(learning_history, dict):
+        return None
+
+    msg_lower = user_message.lower()
+    mastered = learning_history.get("mastered_topics") or []
+    needs_practice = learning_history.get("needs_practice_topics") or []
+    prefs = learning_history.get("explicit_preferences") or {}
+
+    lines = []
+
+    # 1. Topic-Level Adaptation (Only if current question is relevant to known topics)
+    matched_mastered = [t for t in mastered if str(t).lower() in msg_lower]
+    matched_needs_practice = [t for t in needs_practice if str(t).lower() in msg_lower]
+
+    if matched_mastered:
+        lines.append(f"Mastered Topic Focus ({', '.join(matched_mastered)}): Student has solid foundation here. Feel free to include practical nuances, trade-offs, or deeper insights naturally.")
+    elif matched_needs_practice:
+        lines.append(f"Reinforcement Topic Focus ({', '.join(matched_needs_practice)}): Student is building confidence here. Explain core concepts simply with intuitive analogies and clear 1-line examples.")
+
+    # 2. Explicit Preferences (Respected unless overridden by current request)
+    is_detail_override = bool(re.search(r"\b(?:in\s+detail|detailed|elaborate|deep\s+dive|thorough|complete\s+guide|roadmap|explain\s+in\s+depth)\b", msg_lower))
+    is_def_override = bool(re.search(r"\b(?:just\s+(?:give\s+me\s+)?(?:the\s+)?definition|definition\s+only|only\s+define|define\s+only|just\s+define)\b", msg_lower))
+
+    pref_directives = []
+    if "verbosity" in prefs:
+        v = prefs["verbosity"]
+        if v == "concise" and not is_detail_override:
+            pref_directives.append("Keep response concise and direct.")
+        elif v == "detailed":
+            pref_directives.append("Provide a thorough, detailed explanation.")
+
+    if "explanation_style" in prefs:
+        style = prefs["explanation_style"]
+        if style == "examples" and not is_def_override:
+            pref_directives.append("Use concrete examples to explain concepts.")
+        elif style == "step_by_step":
+            pref_directives.append("Structure explanations sequentially step-by-step.")
+        elif style == "simple":
+            pref_directives.append("Use simple, accessible language.")
+
+    if "code_language" in prefs:
+        lang = prefs["code_language"]
+        pref_directives.append(f"Use {lang} for code examples when code is helpful.")
+
+    if pref_directives:
+        lines.append("Active Learning Preferences: " + " ".join(pref_directives))
+
+    if not lines:
+        return None
+
+    return (
+        "── STUDENT LEARNING CONTEXT (Internal personalization — never quote verbatim) ──\n"
+        + "\n".join(lines)
+    )
+
+
 # ── Request Type Detectors ─────────────────────────────────────────────────────
 
 def _detect_identity_request(message: str) -> bool:
@@ -357,6 +448,21 @@ def _detect_complex_detailed_request(message: str) -> bool:
     ))
 
 
+def _detect_educational_concept(message: str) -> bool:
+    """Returns True if message is asking to define or explain an academic or technical concept."""
+    msg_clean = message.lower().strip()
+    return bool(re.search(
+        r"\b("
+        r"what\s+is\s+(?!my\b|the\s+capital|attendance|score|grade|mark)|"
+        r"what\s+are\s+(?!my\b)|"
+        r"explain|how\s+does|how\s+do|define\s+(?!my)|"
+        r"tell\s+me\s+about|describe|overview\s+of|"
+        r"difference\s+between|compare|neural\s+network|operating\s+system"
+        r")\b",
+        msg_clean,
+    ))
+
+
 # ── Curated Educational Links ──────────────────────────────────────────────────
 
 CURATED_TOPIC_RESOURCES = {
@@ -394,6 +500,27 @@ def get_curated_resources_for_text(text: str) -> list[str]:
     ]
 
 
+def _detect_celebration_message(msg: str) -> bool:
+    """Detects student celebration, high marks, or academic achievements."""
+    msg_l = msg.lower()
+    return any(k in msg_l for k in [
+        "good marks", "good score", "got good marks", "got great marks", "high marks",
+        "passed my exam", "cleared my exam", "scored well", "highest marks",
+        "aced the test", "aced my exam", "did well in exam", "did well in test",
+        "i did great", "i succeeded"
+    ])
+
+
+def _detect_study_method_request(msg: str) -> bool:
+    """Detects inquiries asking how to study, study techniques, tips, or study routines."""
+    msg_l = msg.lower()
+    return any(k in msg_l for k in [
+        "how to study", "how should i study", "tips to study", "study technique",
+        "best way to study", "study tips", "study advice", "how do i study",
+        "how can i study", "effective studying", "study better", "study method"
+    ])
+
+
 # ── Main Prompt Builder ────────────────────────────────────────────────────────
 
 def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
@@ -401,7 +528,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     Constructs the target user prompt for the Recovery Coach LLM call.
     Applies strict context separation, fact memory, and mode-targeted instructions.
     """
-    msg = request.user_message.strip()
+    msg = (request.resolved_user_message or request.user_message).strip()
     msg_l = msg.lower()
 
     # 1. Resolve user facts from memory
@@ -418,26 +545,50 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
 
     resolved_name = user_facts.name or ""
 
+    # Parse constraints
+    constraints_dict = request.constraints or {}
+    constraints = ResponseConstraints(**constraints_dict) if constraints_dict else detect_constraints(msg)
+
     # 2. Detect queries and modifiers
     format_modifier = _detect_format_modifier(msg)
-    no_extra = _detect_no_extra_constraint(msg) or format_modifier == "no_extra"
+    no_extra = _detect_no_extra_constraint(msg) or format_modifier == "no_extra" or constraints.no_extra_text
 
     is_name_q = is_name_query(msg)
     is_hometown_q = is_hometown_query(msg)
     is_ai_origin_q = is_ai_origin_query(msg)
     is_math = _detect_math_or_simple_qa(msg)
+    is_celebration = _detect_celebration_message(msg)
+    is_study_method = _detect_study_method_request(msg)
     is_focus = _detect_academic_focus_request(msg)
     is_progress = _detect_progress_request(msg)
     is_improvement = _detect_academic_improvement_request(msg)
     is_explicit_data = _detect_explicit_data_request(msg)
     is_emotional = _detect_emotional_message(msg)
     is_complex = _detect_complex_detailed_request(msg)
+    is_educational = _detect_educational_concept(msg)
     is_resource_link = _detect_resource_link_request(msg)
     is_direct_task = _detect_direct_task_request(msg)
     is_compound_concept_name = ("operating system" in msg_l or "neural network" in msg_l) and ("name" in msg_l or "who am i" in msg_l)
 
-    # Greeting detection: MUST be an explicit greeting and NOT a question
+    # General student conversation detector (motivation, purpose, doubt, study capability)
+    student_keywords = [
+        "study", "studying", "college", "classes", "class", "degree", "university",
+        "coursework", "academics", "homework", "exam", "exams", "revision", "learn",
+        "learning", "motivation", "motivated", "struggle", "struggling", "improve",
+        "grades", "marks", "failing", "fail", "pass", "career", "future", "dropout",
+        "progress", "syllabus"
+    ]
+    student_inquiry_markers = [
+        "why", "how", "will i", "can i", "am i", "should i", "what if", "is it",
+        "do you think", "wondering", "wonder", "worried", "anxious", "scared", "fear",
+        "doubt", "lost", "unsure", "confused", "give up", "worth it", "for me",
+        "get started", "getting started", "feel like"
+    ]
+    has_student_kw = any(k in msg_l for k in student_keywords)
+    has_inquiry_marker = any(m in msg_l for m in student_inquiry_markers)
+    is_general_student = has_student_kw and has_inquiry_marker
 
+    # Greeting detection: MUST be an explicit greeting and NOT a question
     is_greeting = bool(re.search(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening))\b", msg_l)) and not (msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math)
 
     # 3. Determine whether academic context should be injected
@@ -480,12 +631,31 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     if fact_lines:
         sections.append("KNOWN USER IDENTITY CONTEXT:\n" + "\n".join(f"• {line}" for line in fact_lines))
 
+    # Supplemental interaction-derived learning context (topic mastery & preferences)
+    learning_context_sec = format_learning_context_section(request.learning_history, msg)
+    if learning_context_sec:
+        sections.append(learning_context_sec)
+
     sections.append(f"\nStudent's Current Message:\n\"{msg}\"")
 
     # ── Instruction Dispatching by Priority ───────────────────────────────────
 
+    # 0. Word Count Constraint: Exact or Min/Max
+    if constraints.exact_word_count and constraints.exact_word_count > 1:
+        target_w = constraints.exact_word_count
+        min_w = constraints.min_word_count or int(target_w * 0.90)
+        max_w = constraints.max_word_count or int(target_w * 1.10)
+        sections.append(
+            f"\n[CRITICAL LENGTH REQUIREMENT — EXACT WORD COUNT]\n"
+            f"• Target Length: EXACTLY {target_w} words (acceptable range: {min_w}–{max_w} words).\n"
+            f"• You MUST write a detailed, thorough, multi-paragraph response that reaches at least {min_w} words and stays under {max_w} words.\n"
+            f"• Develop complete paragraphs with structure, rich details, and natural flow.\n"
+            f"• Do NOT summarize. Do NOT write a short draft.\n"
+            f"• Output the content directly without meta-commentary like 'Here is your {target_w}-word speech:'."
+        )
+
     # 1. Format Constraint: Exactly One Word
-    if format_modifier == "one_word":
+    elif format_modifier == "one_word" or constraints.one_word:
         target_val = resolved_name if (is_name_q or "name" in msg_l) else ""
         instruction = (
             "\n[CRITICAL OVERRIDE — EXACTLY ONE WORD]\n"
@@ -498,7 +668,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
         sections.append(instruction)
 
     # 2. Format Constraint: Exactly One Sentence
-    elif format_modifier == "one_sentence":
+    elif format_modifier == "one_sentence" or constraints.one_sentence:
         sections.append(
             "\n[CRITICAL OVERRIDE — EXACTLY ONE SENTENCE]\n"
             "• Output EXACTLY ONE SINGLE CONCISE SENTENCE and NOTHING ELSE.\n"
@@ -508,7 +678,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
         )
 
     # 3. Format Constraint: Exactly Three Points / Links
-    elif format_modifier == "three_points":
+    elif format_modifier == "three_points" or constraints.exact_items == 3:
         if is_resource_link:
             links = get_curated_resources_for_text(msg + " " + " ".join([getattr(m, "content", "") for m in request.conversation_history[-4:]]))
             links_str = "\n".join([f"{i+1}. {l}" for i, l in enumerate(links[:3])])
@@ -570,13 +740,19 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
 
     # 6. Identity Name Questions (who am I, what's my name, u dint say my name)
     elif is_name_q:
-
-        name_to_say = resolved_name or "Ajmal"
-        if any(k in msg_l for k in ["u dint say", "you didnt say", "you didn't say"]):
+        if not resolved_name:
+            sections.append(
+                "\n[CRITICAL INSTRUCTION — UNKNOWN IDENTITY QUERY]\n"
+                "• The student asked who they are or what their name is, but their name is not in memory or profile.\n"
+                "• State clearly: \"I don't have your name saved yet.\"\n"
+                "• NEVER invent or guess a name.\n"
+                "Respond directly:"
+            )
+        elif any(k in msg_l for k in ["u dint say", "you didnt say", "you didn't say"]):
             sections.append(
                 f"\n[CRITICAL INSTRUCTION — IDENTITY CORRECTION]\n"
                 f"• The user noted that you didn't say their name.\n"
-                f"• State: \"You're right — your name is {name_to_say}.\"\n"
+                f"• State: \"You're right — your name is {resolved_name}.\"\n"
                 f"• DO NOT give a coaching essay.\n"
                 "Respond directly:"
             )
@@ -584,7 +760,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             sections.append(
                 f"\n[CRITICAL INSTRUCTION — IDENTITY ACKNOWLEDGEMENT]\n"
                 f"• The user reiterated their name.\n"
-                f"• State: \"Yes, you said your name is {name_to_say}.\"\n"
+                f"• State: \"Yes, you said your name is {resolved_name}.\"\n"
                 f"• DO NOT say 'You were introduced as Student'.\n"
                 "Respond directly:"
             )
@@ -592,7 +768,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             sections.append(
                 f"\n[CRITICAL INSTRUCTION — DIRECT IDENTITY QUERY]\n"
                 f"• The student asked who they are or what their name is.\n"
-                f"• Answer directly with ONLY their name: \"{name_to_say}.\"\n"
+                f"• Answer directly with ONLY their name: \"{resolved_name}.\"\n"
                 f"• DO NOT say 'Hello again, [name]'.\n"
                 f"• DO NOT give psychological interpretations, self-awareness advice, or journaling suggestions.\n"
                 f"• DO NOT offer study plans.\n"
@@ -607,6 +783,29 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             f"• Greet the student warmly: \"Hi{name_target}! How can I help you today?\"\n"
             f"• DO NOT generate an unsolicited study plan or academic analysis.\n"
             f"• Keep it under 15 words.\n"
+            "Respond as EduGuardian:"
+        )
+
+    # 7.5. Student Achievement / Good Marks Celebration
+    elif is_celebration:
+        name_target = f" {resolved_name}" if resolved_name else ""
+        sections.append(
+            f"\n[RESPONSE INSTRUCTION — CELEBRATION & ENCOURAGEMENT]\n"
+            f"• The student is celebrating good marks or academic achievement.\n"
+            f"• Congratulate and celebrate with them warmly in 1–2 encouraging sentences (using 2–4 celebratory emojis like 🎉, 🥳, 🏆, ⭐).\n"
+            f"• Keep the tone joyful and encouraging: \"That's great to hear{name_target}! 🎉 Keep building on what you're already doing well. ⭐\"\n"
+            "Respond as EduGuardian:"
+        )
+
+    # 7.8. Study Methods / How to Study
+    elif is_study_method:
+        name_target = f"{resolved_name}, " if resolved_name else ""
+        sections.append(
+            "\n[RESPONSE INSTRUCTION — STUDY METHODS & HABITS]\n"
+            f"• The student is asking how to study effectively.\n"
+            f"• Provide warm, practical, structured advice in 3–5 short actionable paragraphs.\n"
+            f"• Use 3–6 contextual emojis naturally placed as visual anchors (e.g. 🌱📚 for building study skills, 🎯 for starting with one topic, ⏱️☕ for 25-30 min sessions/breaks, 🧠💡 for deep understanding over memorization, ✍️ for self-testing, and 💪📈 for small consistent sessions).\n"
+            f"• Start warmly: \"{name_target}studying is a skill you build step by step...\"\n"
             "Respond as EduGuardian:"
         )
 
@@ -677,23 +876,27 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
         )
 
     # 14. Emotional Distress Support
-    elif is_emotional:
+    elif is_emotional or any(k in msg_l for k in ["discouraged", "don't feel like studying", "cant study", "can't study", "give up", "giving up", "feeling lost", "struggling with"]):
+        name_target = f"{resolved_name}, " if resolved_name else ""
         sections.append(
-            "\n[CRITICAL INSTRUCTION — EMOTIONAL SUPPORT]\n"
-            "• LENGTH: 40–70 words.\n"
-            "• 1. Briefly acknowledge their feeling warmly in 1 sentence.\n"
-            "• 2. Reference a genuine strength from their profile (e.g. Operating Systems).\n"
-            "• 3. Offer ONE manageable starting step.\n"
-            "• Keep it grounded, reassuring, and concise.\n"
+            "\n[CRITICAL INSTRUCTION — EMOTIONAL SUPPORT & ENCOURAGEMENT]\n"
+            "• LENGTH: 50–90 words.\n"
+            f"• 1. Acknowledge their feelings with genuine empathy and warmth (e.g. \"{name_target}it's completely okay to have days when studying feels difficult ❤️🌱\").\n"
+            "• 2. Reassure them that they don't have to fix everything at once and offer ONE small, manageable starting step (e.g. 🎯 or ⏱️).\n"
+            "• 3. Remind them that small sessions count as real progress (e.g. 💪📚✨).\n"
+            "• Use 2–5 supportive emojis naturally placed across your sentences.\n"
+            "• Keep it grounded, reassuring, and deeply supportive.\n"
             "Respond as EduGuardian:"
         )
 
-    # 15. Complex / Detailed Concept Explanation
-    elif is_complex:
+    # 15. Educational Concept Explanation
+    elif is_complex or is_educational:
         sections.append(
-            "\n[RESPONSE INSTRUCTION — DETAILED REQUEST]\n"
-            "• Provide comprehensive, structured detail matching what the user explicitly requested.\n"
-            "• Keep paragraphs focused and use clear headings or bullets where helpful.\n"
+            "\n[RESPONSE INSTRUCTION — EDUCATIONAL CONCEPT EXPLANATION]\n"
+            "• Provide a clear, intuitive, engaging explanation matching what the user requested.\n"
+            "• Use 1–3 relevant concept emojis naturally placed at key points (e.g., 🧠, 💡, 💻, ⚙️, 📚, ✍️).\n"
+            "• If asked to explain in simple words, use clear analogies.\n"
+            "• Keep explanations structured and engaging without unsolicited study plans.\n"
             "Respond as EduGuardian:"
         )
 
@@ -702,7 +905,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
         sections.append(
             "\n[RESPONSE INSTRUCTION — STUDY PLAN PRESENTATION]\n"
             "• LENGTH: 40–70 words.\n"
-            "• Warmly introduce the plan and highlight its core goal and first 1–2 tasks.\n"
+            "• Warmly introduce the plan and highlight its core goal and first 1–2 tasks (e.g. using 🎯, 🗓️, or ⏰).\n"
             "• Encourage opening the plan card to begin.\n"
             "Respond as EduGuardian:"
         )
@@ -713,11 +916,24 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             "\n[RESPONSE INSTRUCTION — ACADEMIC GUIDANCE]\n"
             "• LENGTH: 40–80 words (or 2–3 concise actionable tips).\n"
             "• Focus strictly on the subject asked about.\n"
-            "• Give 1–2 practical study actions.\n"
+            "• Give 1–2 practical study actions (e.g. 📝 or 🧠).\n"
             "Respond as EduGuardian:"
         )
 
-    # 18. Default Conversational QA
+    # 18. General Student Conversation (motivation, college purpose, study ability, self-doubt)
+    elif is_general_student or getattr(request, "response_mode", None) == "general_student_conversation":
+        name_target = f"{resolved_name}, " if resolved_name else ""
+        sections.append(
+            "\n[RESPONSE INSTRUCTION — GENERAL STUDENT CONVERSATION]\n"
+            "• The student is asking an open-ended conversational question about their studies, college, motivation, uncertainty, self-doubt, or academic purpose.\n"
+            f"• Respond naturally, supportively, and constructively with warmth (using 2–5 contextually appropriate emojis like 🌱, ✨, 🎯, 💪, or 🧠 where they naturally add emotional connection).\n"
+            "• Provide encouraging, thoughtful perspective without lecturing, diagnosing mental-health conditions, or labeling the student.\n"
+            "• Do NOT invent facts or dump unnecessary academic metrics/scores.\n"
+            "• Do NOT automatically generate an unsolicited study plan or boilerplate closing.\n"
+            "Respond as EduGuardian:"
+        )
+
+    # 19. Default Conversational QA
     else:
         sections.append(
             "\n[RESPONSE INSTRUCTION — GENERAL QUESTION]\n"
@@ -728,6 +944,239 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             "Respond as EduGuardian:"
         )
 
+    return "\n\n".join(sections)
+
+
+def build_teach_me_prompt(
+    request: CoachRequest,
+    user_facts: UserFacts,
+    resolved_name: str,
+    teaching_state: dict[str, Any] | None = None,
+) -> str:
+    """
+    Builds the structured prompt for interactive Teach Me (Socratic tutoring) mode.
+    Enforces adaptive pedagogical strategy progression (Levels 0–4) when students indicate confusion.
+    """
+    sections: list[str] = []
+    t_state = teaching_state or request.teaching_state or {}
+    topic = t_state.get("topic", "").strip() or "the chosen topic"
+    difficulty = str(t_state.get("difficulty", "beginner"))
+    current_q = t_state.get("current_question")
+    support_level = int(t_state.get("support_level", 0))
+    student_msg = (request.resolved_user_message or request.user_message).strip()
+
+    strategy_names = {
+        0: "Normal Explanation (Beginner-friendly)",
+        1: "Simpler Wording + Concrete Example",
+        2: "Real-World Analogy",
+        3: "Step-by-Step Breakdown with Worked Trace",
+        4: "Interactive Micro-Teaching (1 Tiny Piece + Check Question)",
+    }
+    strategy_label = strategy_names.get(support_level, "Normal Explanation")
+
+    sections.append(
+        f"── TEACH ME ADAPTIVE TUTORING MODE ──\n"
+        f"Topic: {topic}\n"
+        f"Target Difficulty: {difficulty.upper()}\n"
+        f"Active Teaching Strategy: Level {support_level} — {strategy_label}\n"
+        f"Active Question Being Checked: {current_q or 'None (Starting new topic)'}\n"
+        f"Student's Latest Message: \"{student_msg}\""
+    )
+
+    # Add conversation history
+    sections.append(format_conversation_history_section(request.conversation_history, resolved_name))
+
+    # Add supplemental learning context (topic mastery & preferences)
+    learning_context_sec = format_learning_context_section(request.learning_history, student_msg)
+    if learning_context_sec:
+        sections.append(learning_context_sec)
+
+    # Add level-specific pedagogical instructions
+    if support_level == 1:
+        strategy_instructions = (
+            f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 1: SIMPLIFIED WORDING + CONCRETE EXAMPLE]\n"
+            f"The student needs a simpler presentation of {topic}.\n"
+            f"1. Open naturally and warmly (e.g., 'Let\\'s make this much simpler! 🌱' or 'Let\\'s look at this from a simpler angle.').\n"
+            f"2. Simplify vocabulary: avoid unnecessary technical jargon or complex theoretical terms.\n"
+            f"3. Break the concept into fewer, fundamental pieces.\n"
+            f"4. Provide ONE clear, concrete example that illustrates the core idea immediately.\n"
+            f"5. End with ONE simple checking question (mark with 🧠) to confirm understanding. Keep total length 60–110 words."
+        )
+    elif support_level == 2:
+        strategy_instructions = (
+            f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 2: REAL-WORLD ANALOGY]\n"
+            f"The student needs a different pedagogical approach using an intuitive real-world analogy for {topic}.\n"
+            f"1. Open naturally (e.g., 'Let\\'s try a different way using an everyday analogy. 🌱').\n"
+            f"2. Explain the concept using an intuitive real-world analogy (e.g., Russian nesting dolls or boxes inside boxes for recursion, looking up a word in a dictionary for binary search, a stack of trays for stacks).\n"
+            f"3. Connect the analogy back to the technical concept so the student sees the bridge clearly.\n"
+            f"4. End with ONE friendly checking question related to the analogy or concept (mark with 🧠). Keep total length 70–120 words."
+        )
+    elif support_level == 3:
+        strategy_instructions = (
+            f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 3: STEP-BY-STEP BREAKDOWN]\n"
+            f"The student needs a clear, step-by-step mechanical breakdown of {topic}.\n"
+            f"1. Open naturally (e.g., 'Let\\'s take this step-by-step. 🌱').\n"
+            f"2. Break the concept into clear numbered steps (Step 1, Step 2, Step 3).\n"
+            f"3. Use a tiny worked example and trace exactly what happens at each step.\n"
+            f"4. Explain the transition between each step clearly.\n"
+            f"5. End with ONE focused checking question about one of the steps (mark with 🧠). Keep total length 80–130 words."
+        )
+    elif support_level >= 4:
+        strategy_instructions = (
+            f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 4: INTERACTIVE MICRO-TEACHING]\n"
+            f"The student needs focused, interactive micro-steps for {topic}.\n"
+            f"1. Open naturally (e.g., 'Let\\'s take it one tiny step at a time. 🌱').\n"
+            f"2. CRITICAL: Do NOT give a large or multi-part explanation.\n"
+            f"3. Explain ONLY ONE single small piece (1–2 short, clear sentences max).\n"
+            f"4. Ask ONE very simple check question about that single piece (mark with 🧠).\n"
+            f"5. STOP immediately and wait for the student's answer before explaining the next piece. Keep response strictly 30–70 words."
+        )
+    else:
+        # Level 0 (Normal explanation)
+        if not current_q:
+            strategy_instructions = (
+                f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 0: NORMAL START]\n"
+                f"1. Greet briefly and confirm {topic} with warmth (e.g., 'Let\\'s explore **{topic}** together! 🌱').\n"
+                f"2. Explain ONE fundamental concept in 2–3 clear, beginner-friendly sentences.\n"
+                f"3. Provide ONE simple, concrete example (ASCII diagram or short snippet if helpful).\n"
+                f"4. Ask ONE single specific checking question at the end (mark with 🧠).\n"
+                f"5. STOP after the question! Keep total response around 60–120 words."
+            )
+        else:
+            strategy_instructions = (
+                f"[ADAPTIVE TEACHING INSTRUCTION — LEVEL 0: NORMAL PROGRESSION]\n"
+                f"Previous Question Asked: \"{current_q}\"\n"
+                f"Student's Message: \"{student_msg}\"\n\n"
+                f"• If student answered: evaluate warmly (Correct / Partial / Incorrect). If correct, introduce next logical concept + small example + next checking question 🧠.\n"
+                f"• Always end with EXACTLY ONE checking question 🧠. Keep total response around 60–120 words."
+            )
+
+    sections.append(strategy_instructions)
+
+    # General safety & anti-leakage rules
+    sections.append(
+        "[STRICT SAFETY & PERSONALIZATION RULES]\n"
+        "• NEVER tell the student their support level, score, or say they are 'struggling', 'weak', or 'failing'.\n"
+        "• NEVER mention internal system states (e.g., 'support level 3', 'according to your history').\n"
+        "• Phrase all transitions naturally and encouragingly.\n"
+        "• If the student's current message has specific instructions (e.g., 'keep it short', 'use Python'), ALWAYS prioritize the student's immediate request."
+    )
+
+    sections.append("Respond as EduGuardian Socratic Tutor:")
+    return "\n\n".join(sections)
+
+
+
+def build_quiz_prompt(
+    request: CoachRequest,
+    user_facts: UserFacts,
+    resolved_name: str,
+    quiz_state: dict[str, Any] | None = None,
+) -> str:
+    """
+    Builds the structured prompt for interactive Quiz Mode.
+    Guarantees:
+    1. Dynamic LLM generation for arbitrary topics (zero hardcoded questions).
+    2. EXACTLY ONE question presented at a time.
+    3. Strict evaluation of student answer (Correct / Partial / Incorrect).
+    4. Progression across question count (e.g. 1 of 5 -> 2 of 5 ... -> final summary).
+    5. Clean, concise final score & performance breakdown upon session completion.
+    """
+    sections: list[str] = []
+    q_state = quiz_state or request.quiz_state or {}
+    topic = q_state.get("topic", "").strip() or "the chosen topic"
+    difficulty = str(q_state.get("difficulty", "beginner")).upper()
+    q_num = int(q_state.get("current_question_number", 1))
+    total_q = int(q_state.get("total_questions", 5))
+    current_q_text = q_state.get("current_question_text")
+    current_options = q_state.get("current_options") or []
+    current_correct = q_state.get("current_correct_answer")
+    student_msg = (request.resolved_user_message or request.user_message).strip()
+
+    options_str = "\n".join(f"  {opt}" for opt in current_options) if current_options else "None (Short Answer)"
+
+    diff_guidelines = {
+        "BEGINNER": "Definitions, concept recognition, simple examples, and fundamental syntax/application.",
+        "INTERMEDIATE": "Concept application, tracing code/logic, moderate problem solving, comparing approaches, and simple debugging.",
+        "ADVANCED": "Multi-step reasoning, tricky edge cases, complexity/performance analysis, and architectural/design problems.",
+    }
+    target_guideline = diff_guidelines.get(difficulty, diff_guidelines["BEGINNER"])
+
+    sections.append(
+        f"── INTERACTIVE QUIZ MODE ──\n"
+        f"Topic: {topic}\n"
+        f"Target Difficulty: {difficulty} ({target_guideline})\n"
+        f"Current Question Index: Question {q_num} of {total_q}\n"
+        f"Active Question Text: {current_q_text or 'None (Starting Quiz)'}\n"
+        f"Active Question Options:\n{options_str}\n"
+        f"Student's Latest Message: \"{student_msg}\""
+    )
+
+    # Conversation history
+    sections.append(format_conversation_history_section(request.conversation_history, resolved_name))
+
+    if not current_q_text:
+        # Turn 1: Generating Question 1 of total_q
+        sections.append(
+            f"[QUIZ INSTRUCTION — PRESENTING QUESTION 1 OF {total_q}]\n"
+            f"1. Greet with brief enthusiasm and announce the quiz topic (e.g. 'Sure! 🧠 Let\\'s test your understanding of **{topic}**!').\n"
+            f"2. Present **Question 1 of {total_q}**:\n"
+            f"   - Write a clear, high-quality multiple choice question matching {difficulty} difficulty ({target_guideline}).\n"
+            f"   - Provide 4 distinct, formatted options (A, B, C, D), where exactly one is clearly correct.\n"
+            f"   - Format options clearly:\n"
+            f"     A. [Option A]\n"
+            f"     B. [Option B]\n"
+            f"     C. [Option C]\n"
+            f"     D. [Option D]\n"
+            f"3. End with: 'Your answer?'\n"
+            f"4. CRITICAL RULES:\n"
+            f"   - Output ONLY Question 1. Do NOT output Question 2 or any other questions.\n"
+            f"   - Do NOT reveal the answer or internal scores/historical labels.\n"
+            f"   - STOP immediately after presenting the options!"
+        )
+    else:
+        # Turn N: Evaluating previous question (q_num - 1 or current_q_text)
+        is_final_question = (q_num >= total_q)
+        next_q_num = q_num + 1
+
+        if not is_final_question:
+            sections.append(
+                f"[QUIZ INSTRUCTION — EVALUATE ANSWER & PRESENT QUESTION {next_q_num} OF {total_q}]\n"
+                f"Question Answered: \"{current_q_text}\"\n"
+                f"Options:\n{options_str}\n"
+                f"Student's Answer: \"{student_msg}\"\n\n"
+                f"1. EVALUATE THE STUDENT'S ANSWER:\n"
+                f"   • If CORRECT: Celebrate warmly ('Correct! 🎉' or 'Spot on! ⭐') and explain why in 1 sentence.\n"
+                f"   • If PARTIALLY CORRECT: Validate the accurate part ('Partially correct! 👍') and clarify the missing detail in 1 sentence.\n"
+                f"   • If INCORRECT: Give supportive feedback ('Not quite — that\\'s okay! 🌱'), state the correct answer, and explain why in 1 sentence.\n\n"
+                f"2. PRESENT THE NEXT QUESTION (Question {next_q_num} of {total_q}):\n"
+                f"   - Formulate a new high-quality {difficulty} question ({target_guideline}) on {topic}.\n"
+                f"   - Provide 4 clean options (A, B, C, D).\n"
+                f"   - End with: 'Your answer?'\n\n"
+                f"3. CRITICAL RULES:\n"
+                f"   - Present ONLY Question {next_q_num}. Do NOT present any subsequent questions.\n"
+                f"   - Do NOT reveal internal scores or historical labels.\n"
+                f"   - STOP immediately after presenting Question {next_q_num} options!"
+            )
+        else:
+            # Final Question evaluated -> Deliver final score summary
+            sections.append(
+                f"[QUIZ INSTRUCTION — EVALUATE FINAL QUESTION & PROVIDE FINAL SUMMARY]\n"
+                f"Final Question Answered: \"{current_q_text}\"\n"
+                f"Options:\n{options_str}\n"
+                f"Student's Answer: \"{student_msg}\"\n\n"
+                f"1. EVALUATE THE FINAL ANSWER:\n"
+                f"   • If CORRECT: Celebrate ('Correct! 🎉') + 1 sentence explanation.\n"
+                f"   • If INCORRECT: Supportively state correct answer ('Not quite — that\\'s okay! 🌱') + 1 sentence explanation.\n\n"
+                f"2. DELIVER THE FINAL QUIZ RESULT & SUMMARY:\n"
+                f"   - Announce completion with a celebration header: 'Quiz Complete! 🎉'\n"
+                f"   - Present a concise performance summary:\n"
+                f"     🌟 **Strengths**: 1 key concept the student did well with.\n"
+                f"     🔍 **Area to Review**: 1 specific concept to brush up on.\n"
+                f"   - End with 1 encouraging sentence inviting next steps (e.g. 'Keep up the great momentum! 💪 Would you like to create a study plan or test another topic?')."
+            )
+
+    sections.append("Respond as EduGuardian Quiz Coach:")
     return "\n\n".join(sections)
 
 

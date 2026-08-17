@@ -12,6 +12,8 @@ from chatbot.backend.schemas.insight import StudentInsight
 from chatbot.backend.schemas.planner import StudyPlan
 from chatbot.backend.schemas.coach import CoachResponse
 from chatbot.backend.schemas.routing import IntentType
+from chatbot.backend.schemas.teaching import TeachingState
+from chatbot.backend.schemas.quiz import QuizState
 
 
 class GraphState(TypedDict, total=False):
@@ -22,6 +24,8 @@ class GraphState(TypedDict, total=False):
     # ── Input Fields ──────────────────────────────────────────────────────────
     student_id: str
     user_message: str
+    resolved_user_message: str | None
+    is_followup: bool
     conversation_id: str | None
 
     # Student context fetched from repository or passed in request
@@ -29,6 +33,12 @@ class GraphState(TypedDict, total=False):
 
     # Conversation history (last N messages) loaded from DB
     conversation_history: list[Any]
+
+    # Active Teach Me session state (if ongoing or initiated)
+    teaching_state: TeachingState | None
+
+    # Active Quiz session state (if ongoing or initiated)
+    quiz_state: QuizState | None
 
     # ── Intent Routing ────────────────────────────────────────────────────────
     # 'general_support' | 'academic_insight' | 'study_planning'
@@ -50,6 +60,9 @@ class GraphState(TypedDict, total=False):
     # Full processed request metadata and format constraints
     processed_request: dict[str, Any] | None
     constraints: dict[str, Any] | None
+
+    # Supplemental learning history & explicit preferences
+    learning_history: dict[str, Any] | None
 
 
 

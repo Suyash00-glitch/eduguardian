@@ -57,18 +57,18 @@ def extract_name(text: str) -> str | None:
         return None
 
     # Never extract a name from a question or query asking where/who/what
-    if re.search(r"\b(where\s+(am\s+i|i\s+am)|what\s+is\s+my|who\s+am\s+i|why\s+are\s+you|asking\s+where)\b", text, re.IGNORECASE):
+    if re.search(r"\b(where\s+(am\s+i|i\s+am)|what\s+(?:is|was|are)|whats|who\s+am\s+i|why\s+are\s+you|asking\s+where|do\s+you\s+know|can\s+you\s+tell)\b", text, re.IGNORECASE):
         return None
 
     patterns = [
-        # "My name is Ajmal", "Hii my name is Ajmal", "Hello, my name is Ajmal"
-        r"\bmy\s+name\s+is\s+([A-Za-z]+)",
+        # "My name is Ajmal", "Hii my name is Ajmal", "Hello, my name is Ajmal", "My name's Ajmal", "My names Ajmal"
+        r"\bmy\s+name(?:'s|\s+is|\s+was|\s+s)?\s+([A-Za-z]+)",
         # "You can call me Ajmal", "Call me Ajmal"
         r"\b(?:you\s+can\s+)?call\s+me\s+([A-Za-z]+)",
         # "I am called Ajmal"
         r"\bi\s+am\s+called\s+([A-Za-z]+)",
-        # "I'm Ajmal and...", "I am Ajmal and..." (must be followed by proper noun)
-        r"^(?:hi|hii+|hello|hey)?\s*,?\s*i(?:'m|\s+am)\s+([A-Z][a-z]+)(?:\s+and\b|\s*,|\s*\.|$)",
+        # "I'm Ajmal and...", "I am Ajmal and...", "I am Ajmal."
+        r"^(?:hi|hii+|hello|hey)?\s*,?\s*i(?:'m|\s+am)\s+([A-Za-z]+)(?:\s+and\b|\s*,|\s*\.|$)",
     ]
 
     for pat in patterns:
@@ -175,23 +175,74 @@ def is_interest_query(text: str) -> bool:
 
 
 def is_name_query(text: str) -> bool:
-    """Returns True if user is asking for their name or identity."""
+    """
+    Returns True if user is querying their personal name or identity.
+    Strictly distinguishes personal name queries from general educational questions
+    (e.g., 'What is the name of this algorithm?', 'Name three sorting algorithms').
+    """
     if not text:
-        return False
-    # Reject affirmative declarations like "my name is..."
-    if re.search(r"\b(my\s+name\s+is|i\s+am\s+called|call\s+me)\b", text, re.IGNORECASE):
         return False
 
     text_clean = text.lower().strip().rstrip("?.!")
+
+    # 1. Disqualify explicit declarations where the user is introducing/stating their name
+    if re.search(r"\b(?:my\s+name(?:'s|\s+is|\s+was|\s+s)|i\s+am\s+called|call\s+me|i(?:'m|\s+am))\s+[A-Za-z]+", text_clean):
+        # Unless it's a clarification/reminder like "you didn't say my name" or "i told you my name"
+        if not re.search(r"\b(?:u\s+dint\s+say|you\s+didn'?t\s+say|you\s+didnt\s+say|but\s+i\s+said|i\s+told\s+you)\b", text_clean):
+            return False
+
+    # 2. Disqualify general/educational concept queries containing 'name'
+    educational_name_patterns = [
+        # "name of this/that/a/the algorithm/binary tree/data structure"
+        r"\bname(?:s)?\s+(?:of|for)\s+(?:this|that|a|an|the|these|those|[a-z]+)\b",
+        # "name 3 sorting algorithms", "name some data structures"
+        r"\b(?:can\s+you\s+|please\s+)?name\s+(?:\d+|some|three|two|four|five|several|multiple|a\s+few|the\s+following)\b",
+        # "variable name", "domain name", "file name", "method name", "function name"
+        r"\b(?:variable|domain|file|class|method|function|table|column|package|module|tag|process|algorithm|data\s+structure|tree|concept)\s+names?\b",
+    ]
+    for pat in educational_name_patterns:
+        if re.search(pat, text_clean):
+            # Check if it has a personal self-reference like "name of me" or "my name"
+            if not re.search(r"\b(?:my\s+name|name\s+of\s+(?:me|mine|myself|user|student))\b", text_clean):
+                return False
+
+    # 3. Direct standalone identity keywords/tokens
+    # e.g., "name", "name?", "namew", "namew?", "my name", "my name?", "what is name", "what is namew"
+    if re.fullmatch(r"(?:now\s+)?(?:what\s+is\s+)?(?:my\s+)?namew?", text_clean):
+        return True
+
+    # 4. Direct "who am i" / identity questions
+    if re.search(r"\b(?:who\s+am\s+i|who\s+i\s+am|what\s+am\s+i\s+called|what'?s\s+my\s+identity|who\s+am\s+i\s+registered\s+as|tell\s+me\s+who\s+i\s+am|do\s+you\s+know\s+who\s+i\s+am)\b", text_clean):
+        return True
+
+    # 5. Queries asking for the user's name
+    # e.g. "what is my name", "whats my name", "what's my name", "now tell me whats my name", "tell me my name", "what was my name"
+    name_query_patterns = [
+        # "what is/was my name", "whats my name", "what's my name"
+        r"\b(?:what(?:'s|\s+is|\s+was)?|whats)\s+(?:now\s+)?(?:my|the\s+user'?s?|my\s+own)\s+name\b",
+        # "tell me / say / speak my name", "tell me whats my name", "now tell me what is my name"
+        r"\b(?:tell\s+me|tell|say|speak|give\s+me)\s+(?:now\s+)?(?:what(?:'s|\s+is|\s+was)?\s+|whats\s+)?(?:my|the\s+user'?s?|my\s+own)\s+name\b",
+        # "do you know / remember / can you tell me my name"
+        r"\b(?:do\s+you\s+(?:know|remember)|can\s+you\s+tell\s+me|could\s+you\s+tell\s+me|remember)\s+(?:what(?:'s|\s+is|\s+was)?\s+|whats\s+)?(?:my|the\s+user'?s?)\s+name\b",
+        # "u didnt say my name", "you didn't say my name", "i told you my name"
+        r"\b(?:u\s+dint\s+say|you\s+didn'?t\s+say|you\s+didnt\s+say|but\s+i\s+said|i\s+told\s+you)\s+my\s+name\b",
+        # "my name?" or "my name"
+        r"^(?:now\s+)?my\s+name(?:\s+again)?$",
+    ]
+    for pat in name_query_patterns:
+        if re.search(pat, text_clean):
+            return True
+
+    # 6. Check common keyword substrings
     keywords = [
-        "what is my name", "what's my name", "who am i", "who i am",
-        "tell me my name", "say my name", "in 1 word say my name",
+        "what is my name", "what's my name", "whats my name", "who am i", "who i am",
+        "tell me my name", "say my name", "in 1 word say my name", "in one word say my name",
         "u dint say my name", "you didnt say my name", "you didn't say my name",
         "but i said my name", "i told you my name", "what am i called",
-        "what's my identity", "who am i registered as",
+        "what's my identity", "who am i registered as", "do you know my name",
+        "do you remember my name", "can you tell me my name", "what was my name",
     ]
     return any(kw in text_clean for kw in keywords)
-
 
 
 def is_hometown_query(text: str) -> bool:
@@ -332,3 +383,98 @@ def _update_facts_from_text(text: str, facts: UserFacts) -> None:
     for item in interests:
         if item not in facts.interests:
             facts.interests.append(item)
+
+
+# ── Explicit Learning Preference Extractor ────────────────────────────────────
+
+def extract_explicit_preference_action(text: str) -> dict[str, Any] | None:
+    """
+    Extracts an explicit learning preference command or permanent preference declaration.
+    Strictly distinguishes persistent preferences ('From now on, keep your answers short')
+    from single-turn concept questions ('What is a tree? Keep it short') and quiz answers ('2').
+
+    Returns:
+      - {"action": "set", "key": str, "value": str}
+      - {"action": "remove", "key": str}
+      - None (if message is a normal content question, quiz answer, or single turn modifier)
+    """
+    if not text:
+        return None
+
+    text_clean = text.strip()
+    text_lower = text_clean.lower().rstrip(".!")
+
+    # 1. Reject very short strings, pure single words, numbers, or quiz options (e.g. "A", "2", "yes", "ok")
+    if len(text_clean.split()) < 2:
+        return None
+
+    # 2. Check for explicit Removal / Reset commands:
+    reset_match = re.search(r"\b(?:reset|clear|wipe)\s+(?:all\s+)?(?:my\s+)?preferences\b", text_lower)
+    if reset_match:
+        return {"action": "remove", "key": "all"}
+
+    remove_verbosity = re.search(r"\b(?:forget|don'?t\s+remember|remove|delete)\s+(?:that\s+i\s+prefer\s+|my\s+preference\s+for\s+|my\s+)?(?:short|concise|brief|detailed|long|verbosity)\b", text_lower)
+    if remove_verbosity:
+        return {"action": "remove", "key": "verbosity"}
+
+    remove_style = re.search(r"\b(?:forget|don'?t\s+remember|remove|delete)\s+(?:that\s+i\s+prefer\s+|my\s+preference\s+for\s+|my\s+)?(?:examples?|step\s*by\s*step|simple|conceptual|practical|explanation[- ]style)\b", text_lower)
+    if remove_style:
+        return {"action": "remove", "key": "explanation_style"}
+
+    remove_code = re.search(r"\b(?:forget|don'?t\s+remember|remove|delete)\s+(?:that\s+i\s+prefer\s+|my\s+preference\s+for\s+|my\s+)?(?:code\s+language|programming\s+language|python|java|javascript|c\+\+|cpp|golang|c#)\b", text_lower)
+    if remove_code:
+        return {"action": "remove", "key": "code_language"}
+
+    # 3. Disqualify questions asking specific domain concepts (e.g. "What is a binary tree? Keep it short", "Explain recursion using Python")
+    if re.search(r"\b(?:what\s+is|whats|tell\s+me\s+about|how\s+does|teach\s+me|why\s+is|quiz\s+me)\b", text_lower) and not re.search(r"\b(?:from\s+now\s+on|always|i\s+prefer|my\s+preference)\b", text_lower):
+        return None
+    if re.search(r"\bexplain\s+(?:about\s+)?(?!things\b|concepts\b|step\b|simply\b|in\s+detail\b)[a-z]+\b", text_lower) and not re.search(r"\b(?:from\s+now\s+on|always|i\s+prefer|my\s+preference)\b", text_lower):
+        return None
+
+    # 4. Verbosity: concise
+    if re.search(r"\b(?:give\s+me\s+(?:short|concise|brief)\s+(?:answers|responses|explanations)|keep\s+(?:your\s+)?(?:answers|responses|explanations)\s+(?:short|concise|brief)|i\s+prefer\s+(?:short|concise|brief)\s+(?:answers|responses|explanations)|(?:from\s+now\s+on|always)\s*,?\s*(?:keep\s+it\s+(?:short|concise|brief)|be\s+(?:brief|concise)|give\s+(?:me\s+)?(?:short|concise|brief)\s+answers)|don'?t\s+give\s+me\s+long\s+explanations)\b", text_lower):
+        return {"action": "set", "key": "verbosity", "value": "concise"}
+
+    # 5. Verbosity: detailed
+    if re.search(r"\b(?:give\s+me\s+detailed\s+(?:answers|responses|explanations)|explain\s+things\s+in\s+detail\s+from\s+now\s+on|i\s+prefer\s+detailed\s+(?:answers|responses|explanations)|(?:from\s+now\s+on|always)\s*,?\s*(?:give\s+(?:me\s+)?detailed\s+(?:answers|responses|explanations)|explain\s+in\s+detail))\b", text_lower):
+        return {"action": "set", "key": "verbosity", "value": "detailed"}
+
+    # 6. Explanation Style: examples
+    if re.search(r"\b(?:explain\s+(?:things|concepts)?\s*(?:using|with|through)\s+examples|use\s+examples\s+when\s+(?:you\s+)?explain(?:ing)?|i\s+(?:learn\s+better|prefer)\s+(?:with|using)\s+examples|(?:from\s+now\s+on|always)\s*,?\s*use\s+examples)\b", text_lower):
+        return {"action": "set", "key": "explanation_style", "value": "examples"}
+
+    # 7. Explanation Style: step_by_step
+    if re.search(r"\b(?:i\s+prefer\s+step[- ]by[- ]step\s+(?:answers|responses|explanations)|(?:from\s+now\s+on|always)\s*,?\s*(?:explain\s+step[- ]by[- ]step|give\s+step[- ]by[- ]step\s+explanations)|explain\s+things\s+step[- ]by[- ]step\s+from\s+now\s+on)\b", text_lower):
+        return {"action": "set", "key": "explanation_style", "value": "step_by_step"}
+
+    # 8. Explanation Style: simple / conceptual / practical
+    if re.search(r"\b(?:i\s+prefer\s+simple\s+(?:words|explanations)|(?:from\s+now\s+on|always)\s*,?\s*(?:keep\s+it\s+simple|explain\s+simply|use\s+simple\s+words))\b", text_lower):
+        return {"action": "set", "key": "explanation_style", "value": "simple"}
+
+    if re.search(r"\b(?:i\s+prefer\s+conceptual\s+explanations|(?:from\s+now\s+on|always)\s*,?\s*focus\s+on\s+concepts)\b", text_lower):
+        return {"action": "set", "key": "explanation_style", "value": "conceptual"}
+
+    if re.search(r"\b(?:i\s+prefer\s+practical\s+explanations|(?:from\s+now\s+on|always)\s*,?\s*focus\s+on\s+practical\s+applications)\b", text_lower):
+        return {"action": "set", "key": "explanation_style", "value": "practical"}
+
+    # 9. Code Language
+    lang_match = re.search(r"\b(?:(?:from\s+now\s+on|always)\s*,?\s*)?(?:use\s+|prefer\s+)?(python|java|javascript|typescript|c\+\+|cpp|golang|rust|c#|sql|html)\s+(?:for\s+(?:all\s+)?code(?:\s+examples)?|when\s+(?:you\s+)?(?:show|write)\s+code|code\s+examples)\b", text_lower)
+    if lang_match:
+        raw_lang = lang_match.group(1)
+        lang_map = {
+            "python": "Python",
+            "java": "Java",
+            "javascript": "JavaScript",
+            "typescript": "TypeScript",
+            "c++": "C++",
+            "cpp": "C++",
+            "golang": "Go",
+            "rust": "Rust",
+            "c#": "C#",
+            "sql": "SQL",
+            "html": "HTML",
+        }
+        val = lang_map.get(raw_lang, raw_lang.capitalize())
+        return {"action": "set", "key": "code_language", "value": val}
+
+    return None

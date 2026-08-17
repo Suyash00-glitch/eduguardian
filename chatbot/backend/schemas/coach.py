@@ -24,6 +24,10 @@ class CoachRequest(BaseModel):
     """Input payload for Recovery Coach Agent."""
     student_id: str
     user_message: str = Field(description="Latest message from the student")
+    resolved_user_message: str | None = Field(
+        default=None,
+        description="Unified/resolved message when current turn is a follow-up constraint",
+    )
     student_context: StudentContext | None = None
     conversation_history: list[CoachMessageItem] = Field(default_factory=list)
     student_insight: StudentInsight | None = None
@@ -56,8 +60,23 @@ class CoachRequest(BaseModel):
         description="Structured format and length constraints",
     )
 
+    # Active Teach Me session state
+    teaching_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Active tutoring/teaching state (topic, concept, question, difficulty)",
+    )
 
+    # Active Quiz session state
+    quiz_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Active quiz session state (topic, question, score, progress)",
+    )
 
+    # Supplemental learning history (quiz performance by topic, preferences)
+    learning_history: dict[str, Any] | None = Field(
+        default=None,
+        description="Compact learning history and explicit student preferences",
+    )
 
 
 class CoachResponse(BaseModel):
@@ -75,6 +94,14 @@ class CoachResponse(BaseModel):
     study_plan: StudyPlan | None = Field(
         default=None,
         description="Attached study plan object if generated",
+    )
+    teaching_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Updated teaching state if currently in Teach Me mode",
+    )
+    quiz_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Updated quiz state if currently in Quiz mode",
     )
     suggested_followups: list[str] = Field(
         default_factory=list,

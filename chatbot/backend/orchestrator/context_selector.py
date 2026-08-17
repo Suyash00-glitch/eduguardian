@@ -91,7 +91,17 @@ def select_relevant_context(
             inject_academic_insight=True,
         )
 
-    # 5. General Conversation / Greeting
+    # 5. General Student Conversation (motivation, purpose, doubt, open-ended guidance)
+    if intent == RequestIntent.GENERAL_STUDENT_CONVERSATION:
+        return SelectedContext(
+            user_identity_context=identity_dict if identity_dict else None,
+            academic_context=None,  # Zero unnecessary metrics dumped
+            conversation_memory=adapted_history[-4:],
+            request_constraints=constraints,
+            inject_academic_insight=False,
+        )
+
+    # 6. General Conversation / Greeting
     return SelectedContext(
         user_identity_context=identity_dict if identity_dict else None,
         academic_context=None,  # Zero academic records

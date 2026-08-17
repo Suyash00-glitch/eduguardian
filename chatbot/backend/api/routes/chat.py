@@ -55,7 +55,8 @@ async def send_message(
     Sends a user message, executes the LangGraph workflow, persists the turn,
     and returns the supportive assistant response along with any generated study plan.
     """
-    return await chat_service.send_message(student_id=student_id, request=request)
+    effective_student_id = request.user_id or request.student_id or student_id
+    return await chat_service.send_message(student_id=effective_student_id, request=request)
 
 
 # ── POST /chat/stream ──────────────────────────────────────────────────────────
@@ -70,9 +71,10 @@ async def send_message_stream(
     Progressive SSE streaming turn endpoint.
     Streams token chunks progressively and returns metadata/study plan at completion.
     """
+    effective_student_id = request.user_id or request.student_id or student_id
     from fastapi.responses import StreamingResponse
     return StreamingResponse(
-        chat_service.send_message_stream(student_id=student_id, request=request),
+        chat_service.send_message_stream(student_id=effective_student_id, request=request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

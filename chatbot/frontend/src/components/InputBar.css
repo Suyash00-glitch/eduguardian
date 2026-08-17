@@ -1,7 +1,7 @@
 /* InputBar.css */
 
 .input-bar-wrapper {
-  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border-top: var(--glass-border);
@@ -9,15 +9,27 @@
 }
 
 /* ── Quick prompt chips ─────────────────────────────────────── */
+.quick-prompts-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-xs);
+  margin-bottom: var(--space-xs);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
 .quick-prompts {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
+  flex-wrap: nowrap;
+  gap: var(--space-xs);
+  width: max-content;
 }
 
 .quick-chip {
-  padding: 6px var(--space-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
@@ -25,20 +37,30 @@
   color: var(--color-text-muted);
   cursor: pointer;
   transition: var(--transition-fast);
-  font-family: var(--font-family);
+  font-family: inherit;
   white-space: nowrap;
+  user-select: none;
 }
 
 .quick-chip:hover:not(:disabled) {
-  background: var(--color-primary-soft);
-  border-color: var(--color-border-hover);
+  background: var(--color-surface-3);
+  border-color: var(--color-primary);
   color: var(--color-text);
   transform: translateY(-1px);
 }
 
 .quick-chip:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.quick-chip-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.quick-chip-label {
+  font-weight: 500;
 }
 
 /* ── Input row ──────────────────────────────────────────────── */
@@ -49,12 +71,12 @@
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg);
+  padding: 6px 6px 6px var(--space-md);
   transition: var(--transition-fast);
 }
 
 .input-bar:focus-within {
-  border-color: var(--color-border-hover);
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-glow);
 }
 
@@ -67,20 +89,26 @@
   font-family: var(--font-family);
   font-size: var(--font-size-md);
   color: var(--color-text);
-  line-height: 1.6;
-  min-height: 28px;
-  max-height: 160px;
-  padding: 4px 0;
+  line-height: 1.5;
+  min-height: 24px;
+  max-height: 140px;
+  padding: 6px 0;
 }
 
-.input-textarea::placeholder { color: var(--color-text-subtle); }
+.input-textarea::placeholder {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}
 
-.input-textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+.input-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ── Send button ────────────────────────────────────────────── */
 .send-button {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   border: none;
   background: var(--color-surface-3);
@@ -100,17 +128,19 @@
 }
 
 .send-button.send-active:hover {
-  transform: scale(1.07);
-  box-shadow: 0 0 24px rgba(99,102,241,0.5);
+  transform: scale(1.05);
 }
 
-.send-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.send-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* Spinner for loading state */
 .send-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255,255,255,0.3);
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -120,10 +150,21 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── Hint text ──────────────────────────────────────────────── */
 .input-hint {
-  margin-top: var(--space-xs);
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
   text-align: center;
+  margin-top: 6px;
+  margin-bottom: 0;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .input-bar-wrapper {
+    padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  }
+
+  .input-hint {
+    display: none;
+  }
 }

@@ -31,10 +31,27 @@ export interface StudyPlan {
   notes?: string;
 }
 
+export interface QuizState {
+  active: boolean;
+  topic: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  step: 'awaiting_topic' | 'in_progress' | 'completed';
+  current_question_number: number;
+  total_questions: number;
+  current_question_type: 'multiple_choice' | 'short_answer';
+  current_question_text?: string | null;
+  current_options?: string[] | null;
+  last_student_answer?: string | null;
+  last_evaluation?: 'correct' | 'partially_correct' | 'incorrect' | 'unclear' | null;
+  score: number;
+}
+
 export interface ChatResponse {
   conversation_id: string;
   message: Message;
   study_plan: StudyPlan | null;
+  teaching_state?: any;
+  quiz_state?: QuizState | null;
   agents_used?: string[];
 }
 

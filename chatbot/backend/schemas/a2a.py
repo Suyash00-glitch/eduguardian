@@ -47,6 +47,7 @@ class PlannerTaskPayload(BaseModel):
     student_insight: StudentInsight | None = None
     user_goal: str | None = None
     timeframe_days: int = 7
+    learning_history: dict[str, Any] | None = None
 
 
 class CoachTaskPayload(BaseModel):
@@ -57,6 +58,7 @@ class CoachTaskPayload(BaseModel):
     student_insight: StudentInsight | None = None
     study_plan: StudyPlan | None = None
     conversation_history: list[dict[str, str]] = Field(default_factory=list)
+    learning_history: dict[str, Any] | None = None
 
 
 class A2ATaskEnvelope(BaseModel):

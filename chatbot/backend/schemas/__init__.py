@@ -79,11 +79,25 @@ from chatbot.backend.schemas.frontend import (
     FrontendMessage,
 )
 
+from chatbot.backend.schemas.learning_history import (
+    LearningHistory,
+    TopicQuizRecord,
+)
+from chatbot.backend.schemas.guardrails import (
+    GuardrailAction,
+    GuardrailCategory,
+    GuardrailResult,
+)
+
 __all__ = [
     # Common
     "ApiResponse",
     "ErrorDetail",
     "ErrorResponse",
+    # Guardrails
+    "GuardrailAction",
+    "GuardrailCategory",
+    "GuardrailResult",
     # Student Context
     "AttendanceTrend",
     "AttendanceSummary",
@@ -94,6 +108,9 @@ __all__ = [
     "TrendInformation",
     "InterventionHistory",
     "StudentContext",
+    # Learning History
+    "LearningHistory",
+    "TopicQuizRecord",
     # Student Insight
     "SubjectInsight",
     "InsightRequest",

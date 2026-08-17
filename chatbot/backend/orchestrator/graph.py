@@ -79,9 +79,10 @@ async def request_processor_node(state: GraphState) -> dict[str, Any]:
     """
     Request Processor Node:
     1. Extracts and resolves user facts from history & current message.
-    2. Parses explicit format constraints (one_word, one_sentence, exact_items, etc.).
-    3. Checks for deterministic fast-paths (identity lookup, arithmetic, simple QA).
-    4. Categorizes semantic request intent and response mode.
+    2. Resolves conversational follow-ups (e.g. "400 words", "in simple words", "7 days").
+    3. Parses explicit format & word count constraints.
+    4. Checks for deterministic fast-paths (identity lookup, arithmetic, simple QA).
+    5. Categorizes semantic request intent and response mode.
     """
     msg = state.get("user_message", "") or ""
     ctx = state.get("student_context")
@@ -92,13 +93,23 @@ async def request_processor_node(state: GraphState) -> dict[str, Any]:
     user_facts = resolve_user_facts(history, msg, known_name=existing_name)
     conversational_name = user_facts.name
 
-    # 2. Process request & constraints
-    processed = process_user_request(msg, user_facts, ctx)
+    # 2. Process request, follow-ups, constraints & active teaching/quiz states
+    processed = process_user_request(
+        user_message=msg,
+        user_facts=user_facts,
+        student_context=ctx,
+        conversation_history=history,
+        teaching_state=state.get("teaching_state"),
+        quiz_state=state.get("quiz_state"),
+        learning_history=state.get("learning_history"),
+    )
 
     logger.info(
-        "RequestProcessor: Intent='%s' Mode='%s' Deterministic=%s for message: %r",
+        "RequestProcessor: Intent='%s' Mode='%s' FollowUp=%s Resolved=%r Deterministic=%s for message: %r",
         processed.intent.value,
         processed.response_mode.value,
+        processed.is_followup,
+        processed.resolved_message[:80] if processed.resolved_message else None,
         processed.is_deterministic,
         msg[:80],
     )
@@ -110,14 +121,24 @@ async def request_processor_node(state: GraphState) -> dict[str, Any]:
         "user_facts": user_facts.model_dump(),
         "constraints": processed.constraints.model_dump(),
         "processed_request": processed.model_dump(),
+        "resolved_user_message": processed.resolved_message or msg,
+        "is_followup": processed.is_followup,
+        "teaching_state": processed.teaching_state,
+        "quiz_state": processed.quiz_state,
     }
 
     # If deterministic fast-path applies, pre-populate final_response
     if processed.is_deterministic and processed.deterministic_answer is not None:
+        q_dict = processed.quiz_state.to_public_dict() if hasattr(processed.quiz_state, "to_public_dict") else (
+            processed.quiz_state.model_dump(mode="json") if hasattr(processed.quiz_state, "model_dump") else processed.quiz_state
+        )
+        t_dict = processed.teaching_state.model_dump(mode="json") if hasattr(processed.teaching_state, "model_dump") else processed.teaching_state
         updates["final_response"] = CoachResponse(
             response_text=processed.deterministic_answer,
             has_study_plan=False,
             study_plan=None,
+            teaching_state=t_dict,
+            quiz_state=q_dict,
             suggested_followups=[],
             resources=[],
             metadata={"fast_path": True, "intent": processed.intent.value},
@@ -146,10 +167,11 @@ async def student_insight_node(state: GraphState) -> dict[str, Any]:
             "agents_used": state.get("agents_used", []) + ["student_insight"],
         }
 
+    effective_msg = state.get("resolved_user_message") or state.get("user_message")
     request = InsightRequest(
         student_id=state.get("student_id", context.student_id),
         student_context=context,
-        query_context=state.get("user_message"),
+        query_context=effective_msg,
     )
 
     settings = get_settings()
@@ -158,8 +180,13 @@ async def student_insight_node(state: GraphState) -> dict[str, Any]:
     try:
         if settings.a2a_use_remote_services:
             logger.info("StudentInsightNode: Dispatching InsightRequest to Student Insight Agent over official A2A SDK (:8001)")
-            client = StudentInsightA2AClient()
-            insight = await client.analyze(request)
+            try:
+                client = StudentInsightA2AClient()
+                insight = await client.analyze(request)
+            except Exception as remote_exc:
+                logger.warning("StudentInsightNode: Remote A2A call failed (%s) — falling back to in-process agent", remote_exc)
+                from chatbot.backend.agents.student_insight.agent import StudentInsightAgent
+                insight = await StudentInsightAgent().analyze_async(request)
         else:
             from chatbot.backend.agents.student_insight.agent import StudentInsightAgent
             insight = await StudentInsightAgent().analyze_async(request)
@@ -185,12 +212,14 @@ async def study_planner_node(state: GraphState) -> dict[str, Any]:
             "agents_used": state.get("agents_used", []) + ["study_planner"],
         }
 
+    effective_msg = state.get("resolved_user_message") or state.get("user_message", "Create a study plan for me")
     request = PlanRequest(
         student_id=state.get("student_id", context.student_id),
         student_context=context,
         student_insight=state.get("insight_response"),
         existing_plan=state.get("plan_response"),
-        user_goal=state.get("user_message", "Create a study plan for me"),
+        user_goal=effective_msg,
+        learning_history=state.get("learning_history"),
     )
 
     settings = get_settings()
@@ -199,8 +228,13 @@ async def study_planner_node(state: GraphState) -> dict[str, Any]:
     try:
         if settings.a2a_use_remote_services:
             logger.info("StudyPlannerNode: Dispatching PlanRequest to Study Planner Agent over official A2A SDK (:8002)")
-            client = StudyPlannerA2AClient()
-            plan = await client.create_plan(request)
+            try:
+                client = StudyPlannerA2AClient()
+                plan = await client.create_plan(request)
+            except Exception as remote_exc:
+                logger.warning("StudyPlannerNode: Remote A2A call failed (%s) — falling back to in-process agent", remote_exc)
+                from chatbot.backend.agents.study_planner.agent import StudyPlannerAgent
+                plan = await StudyPlannerAgent().create_plan_async(request)
         else:
             from chatbot.backend.agents.study_planner.agent import StudyPlannerAgent
             plan = await StudyPlannerAgent().create_plan_async(request)
@@ -228,10 +262,16 @@ async def recovery_coach_node(state: GraphState) -> dict[str, Any]:
             content = str(getattr(m, "content", "") or "")
         adapted_history.append(CoachMessageItem(role=role, content=content))
 
+    effective_msg = state.get("resolved_user_message") or state.get("user_message", "")
+    t_st = state.get("teaching_state")
+    t_st_dict = t_st.model_dump(mode="json") if hasattr(t_st, "model_dump") else (t_st if isinstance(t_st, dict) else None)
+    q_st = state.get("quiz_state")
+    q_st_dict = q_st.model_dump(mode="json") if hasattr(q_st, "model_dump") else (q_st if isinstance(q_st, dict) else None)
 
     request = CoachRequest(
         student_id=state.get("student_id", "unknown"),
-        user_message=state.get("user_message", ""),
+        user_message=effective_msg,
+        resolved_user_message=state.get("resolved_user_message"),
         student_context=state.get("student_context"),
         conversation_history=adapted_history,
         student_insight=state.get("insight_response"),
@@ -240,22 +280,60 @@ async def recovery_coach_node(state: GraphState) -> dict[str, Any]:
         conversational_name=state.get("conversational_name"),
         user_facts=state.get("user_facts"),
         constraints=state.get("constraints"),
+        teaching_state=t_st_dict,
+        quiz_state=q_st_dict,
+        learning_history=state.get("learning_history"),
     )
 
     settings = get_settings()
     response: CoachResponse | None = None
 
-    if settings.a2a_use_remote_services:
-        logger.info("RecoveryCoachNode: Dispatching CoachRequest to Recovery Coach Agent over official A2A SDK (:8003)")
-        client = RecoveryCoachA2AClient()
-        response = await client.generate_response(request)
-    else:
-        from chatbot.backend.agents.recovery_coach.agent import RecoveryCoachAgent
-        response = await RecoveryCoachAgent().generate_response(request)
+    try:
+        if settings.a2a_use_remote_services:
+            logger.info("RecoveryCoachNode: Dispatching CoachRequest to Recovery Coach Agent over official A2A SDK (:8003)")
+            try:
+                client = RecoveryCoachA2AClient()
+                response = await client.generate_response(request)
+            except Exception as remote_exc:
+                logger.warning("RecoveryCoachNode: Remote A2A call failed (%s) — falling back to in-process agent", remote_exc)
+                from chatbot.backend.agents.recovery_coach.agent import RecoveryCoachAgent
+                response = await RecoveryCoachAgent().generate_response(request)
+        else:
+            from chatbot.backend.agents.recovery_coach.agent import RecoveryCoachAgent
+            response = await RecoveryCoachAgent().generate_response(request)
+    except Exception as exc:
+        logger.error("RecoveryCoachNode: Execution failed (%s)", exc)
+        from chatbot.backend.schemas.coach import CoachResponse
+        response = CoachResponse(
+            response_text="I'm here to support you with your studies. How can I help you today?",
+            has_study_plan=False,
+            study_plan=None,
+            suggested_followups=[],
+            resources=[],
+            metadata={},
+        )
+
+    updated_teaching = state.get("teaching_state")
+    if response and response.teaching_state:
+        from chatbot.backend.schemas.teaching import TeachingState
+        try:
+            updated_teaching = TeachingState.model_validate(response.teaching_state)
+        except Exception:
+            pass
+
+    updated_quiz = state.get("quiz_state")
+    if response and response.quiz_state:
+        from chatbot.backend.schemas.quiz import QuizState
+        try:
+            updated_quiz = QuizState.model_validate(response.quiz_state)
+        except Exception:
+            pass
 
     return {
         **state,
         "final_response": response,
+        "teaching_state": updated_teaching,
+        "quiz_state": updated_quiz,
         "agents_used": state.get("agents_used", []) + ["recovery_coach"],
     }
 
@@ -283,12 +361,13 @@ async def response_validator_node(state: GraphState) -> dict[str, Any]:
     except Exception:
         req_intent = RequestIntent.GENERAL_CONVERSATION
 
-    # Enforce constraints and safety
+    # Enforce constraints, safety, and academic grounding
     validated_text = ResponseValidator.validate_and_enforce(
         response_text=final_resp.response_text,
         constraints=constraints,
         user_facts=user_facts,
         intent=req_intent,
+        student_context=state.get("student_context"),
     )
 
     final_resp.response_text = validated_text

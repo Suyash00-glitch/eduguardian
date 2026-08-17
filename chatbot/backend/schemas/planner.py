@@ -15,6 +15,9 @@ from chatbot.backend.schemas.student import StudentContext
 from chatbot.backend.schemas.insight import StudentInsight
 
 
+from pydantic import BaseModel, Field, field_validator
+
+
 class PriorityLevel(str, Enum):
     HIGH = "high"
     MEDIUM = "medium"
@@ -32,7 +35,10 @@ class StudyTask(BaseModel):
         default="",
         description="Detailed instructions on what and how to study",
     )
-    subject: str = Field(description="Course or domain the task relates to")
+    subject: str = Field(
+        default="General Study",
+        description="Course or domain the task relates to (never None or empty)",
+    )
     day: str | None = Field(
         default=None,
         description="Day of week (e.g. 'Monday') or relative period ('Day 1')",
@@ -55,6 +61,49 @@ class StudyTask(BaseModel):
         default=False,
         description="Completion state tracked in frontend",
     )
+
+    @field_validator("subject", mode="before")
+    @classmethod
+    def validate_subject(cls, v: Any) -> str:
+        if v is None:
+            return "General Study"
+        s = str(v).strip()
+        if not s or s.lower() in ("none", "null", "n/a", "undefined", "unknown"):
+            return "General Study"
+        return s
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> str:
+        if v is None:
+            return "Focused Study Session"
+        s = str(v).strip()
+        if not s or s.lower() in ("none", "null", "n/a"):
+            return "Focused Study Session"
+        return s
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def validate_priority(cls, v: Any) -> PriorityLevel:
+        if isinstance(v, PriorityLevel):
+            return v
+        if isinstance(v, str):
+            clean = v.strip().lower()
+            if clean in ("high", "urgent", "critical"):
+                return PriorityLevel.HIGH
+            elif clean in ("low", "optional"):
+                return PriorityLevel.LOW
+            return PriorityLevel.MEDIUM
+        return PriorityLevel.MEDIUM
+
+    @field_validator("duration_minutes", mode="before")
+    @classmethod
+    def validate_duration(cls, v: Any) -> int:
+        try:
+            val = int(v)
+            return max(10, min(360, val))
+        except (ValueError, TypeError):
+            return 60
 
 
 class PlanMilestone(BaseModel):
@@ -84,6 +133,10 @@ class PlanRequest(BaseModel):
         default=None,
         description="Optional existing plan to revise or adjust",
     )
+    learning_history: dict[str, Any] | None = Field(
+        default=None,
+        description="Supplemental interaction-derived learning history (topic records, preferences)",
+    )
 
 
 class StudyPlan(BaseModel):
@@ -92,7 +145,10 @@ class StudyPlan(BaseModel):
     Directly renderable in the chatbot UI modal/cards.
     """
     plan_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str = Field(description="Title of the plan (e.g. 'Weekly Focused Revision Plan')")
+    title: str = Field(
+        default="Personalized Study Plan",
+        description="Title of the plan (e.g. 'Weekly Focused Revision Plan')",
+    )
     goals: list[str] = Field(
         default_factory=list,
         description="Primary academic objectives for this plan",
@@ -126,3 +182,18 @@ class StudyPlan(BaseModel):
         description="Why this specific schedule was prioritized",
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("week_start", mode="before")
+    @classmethod
+    def validate_week_start(cls, v: Any) -> str:
+        from datetime import date
+        if not v or not isinstance(v, str) or str(v).strip().lower() in ("none", "null", ""):
+            return date.today().isoformat()
+        return str(v).strip()
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> str:
+        if not v or not isinstance(v, str) or str(v).strip().lower() in ("none", "null", ""):
+            return "Personalized Study Schedule"
+        return str(v).strip()

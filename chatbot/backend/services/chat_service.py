@@ -9,6 +9,8 @@ Handles:
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 import logging
 import uuid
 from typing import Any
@@ -27,6 +29,7 @@ from chatbot.backend.schemas.chat import (
     MessageSchema,
 )
 from chatbot.backend.schemas.planner import StudyPlan
+from chatbot.backend.core.memory import extract_explicit_preference_action
 
 logger = logging.getLogger(__name__)
 
@@ -122,19 +125,26 @@ class ChatService:
 
         conversation_id = conversation.id
 
-        # 3. Load Context, History & Latest Plan
+        # 3. Load Context, History, Latest Plan & Active Teaching State
         student_context = await self._context_repo.get_context(student_id)
         history_messages = await self._conv_repo.get_history(conversation_id, limit=50)
         history_schemas = [self._conv_repo.to_schema(m) for m in history_messages]
         latest_plan = await self._conv_repo.get_latest_study_plan(conversation_id)
+        latest_teaching_state = await self._conv_repo.get_latest_teaching_state(conversation_id)
+        latest_quiz_state = await self._conv_repo.get_latest_quiz_state(conversation_id)
+        learning_history = await self._conv_repo.get_learning_history(student_id)
+        learning_history_dict = learning_history.model_dump(mode="json") if learning_history else None
 
-        # 4. Construct LangGraph State & Execute
+        # 4. Build Initial LangGraph State & Execute Workflow
         initial_state: GraphState = {
             "student_id": student_id,
             "user_message": msg_text,
             "conversation_id": str(conversation_id),
             "student_context": student_context,
             "conversation_history": history_schemas,
+            "teaching_state": latest_teaching_state,
+            "quiz_state": latest_quiz_state,
+            "learning_history": learning_history_dict,
             "insight_response": None,
             "plan_response": latest_plan,
             "final_response": None,
@@ -146,8 +156,6 @@ class ChatService:
             "processed_request": None,   # populated by request_processor
             "constraints": None,         # populated by request_processor
         }
-
-
 
         try:
             result_state = await run_graph(initial_state)
@@ -171,17 +179,58 @@ class ChatService:
         plan_response = result_state.get("plan_response")
         agents_used = result_state.get("agents_used", [])
 
-        # 6. Persist Messages
+        # 6. Persist Messages & Structured Artifacts
+        structured_payload: dict[str, Any] | None = None
+        if plan_response:
+            structured_payload = plan_response.model_dump(mode="json")
+            structured_payload["type"] = "study_plan"
+        if coach_response and coach_response.teaching_state:
+            if structured_payload is None:
+                structured_payload = {}
+            structured_payload["teaching_state"] = coach_response.teaching_state
+        elif result_state.get("teaching_state"):
+            t_st = result_state.get("teaching_state")
+            if t_st is not None:
+                if structured_payload is None:
+                    structured_payload = {}
+                structured_payload["teaching_state"] = t_st.model_dump(mode="json") if hasattr(t_st, "model_dump") else t_st
+
+        if coach_response and coach_response.quiz_state:
+            if structured_payload is None:
+                structured_payload = {}
+            structured_payload["quiz_state"] = coach_response.quiz_state
+            structured_payload["type"] = "quiz_session"
+        elif result_state.get("quiz_state"):
+            q_st = result_state.get("quiz_state")
+            if q_st is not None:
+                if structured_payload is None:
+                    structured_payload = {}
+                structured_payload["quiz_state"] = q_st.model_dump(mode="json") if hasattr(q_st, "model_dump") else q_st
+                structured_payload["type"] = "quiz_session"
+
+        pref_action = extract_explicit_preference_action(msg_text)
+        if pref_action:
+            if structured_payload is None:
+                structured_payload = {}
+            structured_payload["preference_action"] = pref_action
+            if "type" not in structured_payload:
+                structured_payload["type"] = "learning_preference"
+
         await self._conv_repo.save_user_message(conversation_id, msg_text)
         assistant_msg = await self._conv_repo.save_assistant_message(
             conversation_id=conversation_id,
             content=response_text,
-            structured_data=plan_response.model_dump(mode="json") if plan_response else None,
+            structured_data=structured_payload,
             agents_used=agents_used,
         )
 
-        # 7. Build Response
+        # 7. Build Response (strictly sanitize correct_answer so it never leaks)
         study_plan_schema = _plan_to_schema(plan_response)
+        teaching_state_data = structured_payload.get("teaching_state") if structured_payload else None
+        raw_quiz_data = structured_payload.get("quiz_state") if structured_payload else None
+        quiz_state_data = dict(raw_quiz_data) if isinstance(raw_quiz_data, dict) else None
+        if quiz_state_data:
+            quiz_state_data.pop("current_correct_answer", None)
 
         return ChatResponse(
             conversation_id=conversation_id,
@@ -192,6 +241,8 @@ class ChatService:
                 created_at=assistant_msg.created_at,
             ),
             study_plan=study_plan_schema,
+            teaching_state=teaching_state_data,
+            quiz_state=quiz_state_data,
             agents_used=agents_used,
         )
 
@@ -206,94 +257,156 @@ class ChatService:
         import asyncio
         import json
         import re
+        from chatbot.backend.db.session import AsyncSessionLocal
+        from chatbot.backend.db.repositories.conversation import ConversationRepository
 
         msg_text = (request.message or "").strip()
         if not msg_text:
             yield f"data: {json.dumps({'type': 'error', 'message': 'Message cannot be empty.'})}\n\n"
             return
 
-        # 1. Resolve Conversation
-        auto_title = _generate_auto_title(msg_text)
-        if request.conversation_id:
-            conversation = await self._conv_repo.get_conversation(request.conversation_id)
-            if not conversation or conversation.student_id != student_id:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found or access denied.'})}\n\n"
-                return
-            if not conversation.title:
-                await self._conv_repo.update_title(conversation.id, auto_title)
-                conversation.title = auto_title
-        else:
-            conversation = await self._conv_repo.create_conversation(
-                student_id=student_id,
-                title=auto_title,
-            )
+        async with AsyncSessionLocal() as session:
+            conv_repo = ConversationRepository(session)
+            try:
+                # 1. Resolve Conversation
+                auto_title = _generate_auto_title(msg_text)
+                if request.conversation_id:
+                    conversation = await conv_repo.get_conversation(request.conversation_id)
+                    if not conversation or conversation.student_id != student_id:
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found or access denied.'})}\n\n"
+                        return
+                    if not conversation.title:
+                        await conv_repo.update_title(conversation.id, auto_title)
+                        conversation.title = auto_title
+                else:
+                    conversation = await conv_repo.create_conversation(
+                        student_id=student_id,
+                        title=auto_title,
+                    )
 
-        conversation_id = conversation.id
+                conversation_id = conversation.id
 
-        # 2. Load Context & History
-        student_context = await self._context_repo.get_context(student_id)
-        history_messages = await self._conv_repo.get_history(conversation_id, limit=50)
-        history_schemas = [self._conv_repo.to_schema(m) for m in history_messages]
-        latest_plan = await self._conv_repo.get_latest_study_plan(conversation_id)
+                # 2. Load Context, History, Latest Plan & Active Teaching State
+                student_context = await self._context_repo.get_context(student_id)
+                history_messages = await conv_repo.get_history(conversation_id, limit=50)
+                history_schemas = [conv_repo.to_schema(m) for m in history_messages]
+                latest_plan = await conv_repo.get_latest_study_plan(conversation_id)
+                latest_teaching_state = await conv_repo.get_latest_teaching_state(conversation_id)
+                latest_quiz_state = await conv_repo.get_latest_quiz_state(conversation_id)
+                learning_history = await conv_repo.get_learning_history(student_id)
+                learning_history_dict = learning_history.model_dump(mode="json") if learning_history else None
 
-        # 3. Construct State & Execute Graph
-        initial_state: GraphState = {
-            "student_id": student_id,
-            "user_message": msg_text,
-            "conversation_id": str(conversation_id),
-            "student_context": student_context,
-            "conversation_history": history_schemas,
-            "insight_response": None,
-            "plan_response": latest_plan,
-            "final_response": None,
-            "agents_used": [],
-            "intent": "general_support",
-            "response_mode": None,
-            "conversational_name": None,
-            "user_facts": None,
-            "processed_request": None,
-            "constraints": None,
-        }
+                # 3. Construct State & Execute Graph
+                initial_state: GraphState = {
+                    "student_id": student_id,
+                    "user_message": msg_text,
+                    "conversation_id": str(conversation_id),
+                    "student_context": student_context,
+                    "conversation_history": history_schemas,
+                    "teaching_state": latest_teaching_state,
+                    "quiz_state": latest_quiz_state,
+                    "learning_history": learning_history_dict,
+                    "insight_response": None,
+                    "plan_response": latest_plan,
+                    "final_response": None,
+                    "agents_used": [],
+                    "intent": "general_support",
+                    "response_mode": None,
+                    "conversational_name": None,
+                    "user_facts": None,
+                    "processed_request": None,
+                    "constraints": None,
+                }
 
-        try:
-            result_state = await run_graph(initial_state)
-        except Exception as exc:
-            logger.error("ChatService stream: LangGraph execution failed (%s)", exc, exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'message': 'I had trouble processing that. Please try again.'})}\n\n"
-            return
+                try:
+                    result_state = await run_graph(initial_state)
+                except Exception as exc:
+                    logger.error("ChatService stream: LangGraph execution failed (%s)", exc, exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'I had trouble processing that. Please try again.'})}\n\n"
+                    return
 
-        coach_response = result_state.get("final_response")
-        response_text = coach_response.response_text if coach_response else "I am here to help with your academic questions."
-        plan_response = result_state.get("plan_response")
-        agents_used = result_state.get("agents_used", [])
+                coach_response = result_state.get("final_response")
+                response_text = coach_response.response_text if coach_response else "I am here to help with your academic questions."
+                plan_response = result_state.get("plan_response")
+                agents_used = result_state.get("agents_used", [])
 
-        # 4. Persist turns in PostgreSQL
-        await self._conv_repo.save_user_message(conversation_id, msg_text)
-        assistant_msg = await self._conv_repo.save_assistant_message(
-            conversation_id=conversation_id,
-            content=response_text,
-            structured_data=plan_response.model_dump(mode="json") if plan_response else None,
-            agents_used=agents_used,
-        )
+                # 4. Persist turns in PostgreSQL & commit
+                structured_payload: dict[str, Any] | None = None
+                if plan_response:
+                    structured_payload = plan_response.model_dump(mode="json")
+                    structured_payload["type"] = "study_plan"
+                if coach_response and coach_response.teaching_state:
+                    if structured_payload is None:
+                        structured_payload = {}
+                    structured_payload["teaching_state"] = coach_response.teaching_state
+                elif result_state.get("teaching_state"):
+                    t_st = result_state.get("teaching_state")
+                    if t_st is not None:
+                        if structured_payload is None:
+                            structured_payload = {}
+                        structured_payload["teaching_state"] = t_st.model_dump(mode="json") if hasattr(t_st, "model_dump") else t_st
 
-        study_plan_schema = _plan_to_schema(plan_response)
+                if coach_response and coach_response.quiz_state:
+                    if structured_payload is None:
+                        structured_payload = {}
+                    structured_payload["quiz_state"] = coach_response.quiz_state
+                    structured_payload["type"] = "quiz_session"
+                elif result_state.get("quiz_state"):
+                    q_st = result_state.get("quiz_state")
+                    if q_st is not None:
+                        if structured_payload is None:
+                            structured_payload = {}
+                        structured_payload["quiz_state"] = q_st.model_dump(mode="json") if hasattr(q_st, "model_dump") else q_st
+                        structured_payload["type"] = "quiz_session"
 
-        # 5. Yield progressive tokens
-        words = re.findall(r"\S+|\s+", response_text)
-        for w in words:
-            yield f"data: {json.dumps({'type': 'chunk', 'text': w})}\n\n"
-            await asyncio.sleep(0.012)
+                pref_action = extract_explicit_preference_action(msg_text)
+                if pref_action:
+                    if structured_payload is None:
+                        structured_payload = {}
+                    structured_payload["preference_action"] = pref_action
+                    if "type" not in structured_payload:
+                        structured_payload["type"] = "learning_preference"
 
-        # 6. Yield metadata and done
-        meta_event = {
-            "type": "meta",
-            "conversation_id": str(conversation_id),
-            "message_id": str(assistant_msg.id),
-            "study_plan": study_plan_schema.model_dump(mode="json") if study_plan_schema else None,
-            "agents_used": agents_used,
-        }
-        yield f"data: {json.dumps(meta_event)}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                await conv_repo.save_user_message(conversation_id, msg_text)
+                assistant_msg = await conv_repo.save_assistant_message(
+                    conversation_id=conversation_id,
+                    content=response_text,
+                    structured_data=structured_payload,
+                    agents_used=agents_used,
+                )
+                await session.commit()
+
+                study_plan_schema = _plan_to_schema(plan_response)
+                teaching_state_data = structured_payload.get("teaching_state") if structured_payload else None
+                raw_quiz_data = structured_payload.get("quiz_state") if structured_payload else None
+                quiz_state_data = dict(raw_quiz_data) if isinstance(raw_quiz_data, dict) else None
+                if quiz_state_data:
+                    quiz_state_data.pop("current_correct_answer", None)
+
+                # 5. Yield progressive tokens
+                words = re.findall(r"\S+|\s+", response_text)
+                for w in words:
+                    yield f"data: {json.dumps({'type': 'chunk', 'text': w})}\n\n"
+                    await asyncio.sleep(0.012)
+
+                # 6. Yield metadata and done
+                created_at_iso = assistant_msg.created_at.isoformat() if hasattr(assistant_msg, "created_at") and assistant_msg.created_at else datetime.utcnow().isoformat() + "Z"
+                meta_event = {
+                    "type": "meta",
+                    "conversation_id": str(conversation_id),
+                    "message_id": str(assistant_msg.id),
+                    "created_at": created_at_iso,
+                    "study_plan": study_plan_schema.model_dump(mode="json") if study_plan_schema else None,
+                    "teaching_state": teaching_state_data,
+                    "quiz_state": quiz_state_data,
+                    "agents_used": agents_used,
+                }
+                yield f"data: {json.dumps(meta_event)}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            except Exception as e:
+                await session.rollback()
+                logger.error("ChatService stream: Error occurred during streaming (%s)", e, exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
 
     async def get_history(

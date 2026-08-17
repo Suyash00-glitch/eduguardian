@@ -13,10 +13,11 @@ interface Props {
 }
 
 const STARTER_PROMPTS = [
-  '📋 Make me a study plan for this week',
-  '📚 How can I catch up on my courses?',
-  '🎯 Help me break down exam preparation',
-  '⏰ I feel overwhelmed with assignments',
+  { icon: '📚', label: 'Teach me something', prompt: 'Teach me something' },
+  { icon: '📋', label: 'Make me a study plan', prompt: 'Make me a study plan' },
+  { icon: '📊', label: 'How am I doing?', prompt: 'How am I doing?' },
+  { icon: '💪', label: 'Help me stay motivated', prompt: 'Help me stay motivated' },
+  { icon: '🧠', label: 'Quiz me', prompt: 'Quiz me' },
 ];
 
 export const ChatWindow: React.FC<Props> = ({
@@ -39,21 +40,22 @@ export const ChatWindow: React.FC<Props> = ({
     <div className="chat-window" role="log" aria-live="polite" aria-label="Chat messages">
       {isEmpty ? (
         <div className="chat-empty" data-testid="chat-empty-state">
-          <div className="chat-empty-icon">✨</div>
+          <div className="chat-empty-icon" aria-hidden="true">👋</div>
           <h2 className="chat-empty-title">Hi! I'm EduGuardian</h2>
           <p className="chat-empty-subtitle">
-            Your personal AI academic coach. I'm here to help you study smarter,
-            organize your schedule, and reach your full potential.
+            Your personal academic coach. Ready to help you master coursework,
+            structure study schedules, and reach your full potential.
           </p>
-          <div className="chat-empty-chips">
-            {STARTER_PROMPTS.map((prompt, i) => (
+          <div className="chat-empty-chips" role="group" aria-label="Suggested starter questions">
+            {STARTER_PROMPTS.map((item, i) => (
               <button
                 key={i}
                 className="empty-chip"
-                onClick={() => onSelectPrompt?.(prompt)}
-                aria-label={`Ask: ${prompt}`}
+                onClick={() => onSelectPrompt?.(item.prompt)}
+                aria-label={`Ask: ${item.label}`}
               >
-                {prompt}
+                <span className="empty-chip-icon">{item.icon}</span>
+                <span className="empty-chip-label">{item.label}</span>
               </button>
             ))}
           </div>
@@ -95,3 +97,4 @@ export const ChatWindow: React.FC<Props> = ({
     </div>
   );
 };
+

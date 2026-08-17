@@ -44,7 +44,7 @@ export async function sendMessage(payload: SendMessagePayload): Promise<ChatResp
 
 export interface StreamHandlers {
   onChunk: (text: string) => void;
-  onMeta?: (meta: { conversation_id: string; message_id: string; study_plan: any; agents_used: string[] }) => void;
+  onMeta?: (meta: { conversation_id: string; message_id: string; created_at?: string; study_plan: any; agents_used: string[] }) => void;
   onError?: (err: Error) => void;
   onDone?: () => void;
 }

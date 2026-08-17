@@ -1,44 +1,69 @@
 /* ============================================================
    EduGuardian AI Chatbot — Design System
-   Premium dark glassmorphism UI
+   Universal Theme Tokens (Dark & Light)
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── CSS Custom Properties ────────────────────────────────── */
-:root {
-  /* Colors */
-  --color-bg:           #0a0f1e;
-  --color-surface:      #111827;
-  --color-surface-2:    #1a2236;
-  --color-surface-3:    #243047;
-  --color-border:       rgba(99, 143, 255, 0.12);
-  --color-border-hover: rgba(99, 143, 255, 0.28);
+/* ── Default Dark Theme ───────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --theme: dark;
 
-  --color-primary:      #6366f1;
-  --color-primary-soft: rgba(99, 102, 241, 0.15);
-  --color-primary-glow: rgba(99, 102, 241, 0.35);
+  /* Base & Surfaces */
+  --color-bg:            #0a0f1e;
+  --color-surface:       #111827;
+  --color-surface-2:     #1a2236;
+  --color-surface-3:     #243047;
+  --color-surface-4:     #374151;
 
-  --color-accent:       #06b6d4;
-  --color-accent-soft:  rgba(6, 182, 212, 0.12);
+  /* Borders & Dividers */
+  --color-border:        rgba(99, 143, 255, 0.12);
+  --color-border-hover:  rgba(99, 143, 255, 0.28);
 
-  --color-success:      #10b981;
-  --color-warning:      #f59e0b;
-  --color-danger:       #ef4444;
+  /* Primary Brand & Accents */
+  --color-primary:       #6366f1;
+  --color-primary-soft:  rgba(99, 102, 241, 0.15);
+  --color-primary-glow:  rgba(99, 102, 241, 0.35);
 
-  --color-text:         #f1f5f9;
-  --color-text-muted:   #94a3b8;
-  --color-text-subtle:  #64748b;
+  --color-accent:        #06b6d4;
+  --color-accent-soft:   rgba(6, 182, 212, 0.12);
+
+  /* Status Colors */
+  --color-success:       #10b981;
+  --color-warning:       #f59e0b;
+  --color-danger:        #ef4444;
+
+  /* Text & Typography */
+  --color-text:          #f1f5f9;
+  --color-text-muted:    #94a3b8;
+  --color-text-subtle:   #64748b;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
-  --gradient-card:    linear-gradient(145deg, rgba(99,102,241,0.08), rgba(6,182,212,0.04));
+  --gradient-primary:     linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(99,102,241,0.08), rgba(6,182,212,0.04));
   --gradient-user-bubble: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(6,182,212,0.06) 0%, transparent 60%);
 
-  /* Glass */
-  --glass-bg:     rgba(17, 24, 39, 0.7);
-  --glass-border: 1px solid rgba(99, 143, 255, 0.15);
-  --glass-blur:   blur(12px);
+  /* Glass & Overlays */
+  --glass-bg:            rgba(17, 24, 39, 0.75);
+  --glass-border:        1px solid rgba(99, 143, 255, 0.15);
+  --glass-blur:          blur(12px);
+  --drawer-overlay-bg:   rgba(0, 0, 0, 0.55);
+  --modal-overlay-bg:    rgba(0, 0, 0, 0.75);
+
+  /* Code Blocks */
+  --code-bg:             #0f172a;
+  --code-border:         rgba(99, 143, 255, 0.15);
+  --code-text:           #e2e8f0;
+
+  /* Shadows */
+  --shadow-sm:           0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:           0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg:           0 8px 40px rgba(0,0,0,0.6);
+  --shadow-glow:         0 0 32px rgba(99,102,241,0.25);
+  --scrollbar-thumb:     rgba(99, 102, 241, 0.3);
+  --scrollbar-thumb-hover: rgba(99, 102, 241, 0.5);
 
   /* Spacing */
   --space-xs:  4px;
@@ -55,25 +80,79 @@
   --radius-xl:  24px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.5);
-  --shadow-lg:  0 8px 40px rgba(0,0,0,0.6);
-  --shadow-glow: 0 0 32px rgba(99,102,241,0.25);
-
   /* Transitions */
   --transition-fast:   all 0.15s ease;
   --transition-normal: all 0.25s ease;
   --transition-slow:   all 0.4s ease;
 
   /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   --font-size-xs:  11px;
   --font-size-sm:  13px;
   --font-size-md:  15px;
   --font-size-lg:  18px;
   --font-size-xl:  24px;
   --font-size-2xl: 32px;
+}
+
+/* ── Light Theme ──────────────────────────────────────────── */
+[data-theme="light"] {
+  --theme: light;
+
+  /* Base & Surfaces */
+  --color-bg:            #f8fafc;
+  --color-surface:       #ffffff;
+  --color-surface-2:     #f1f5f9;
+  --color-surface-3:     #e2e8f0;
+  --color-surface-4:     #cbd5e1;
+
+  /* Borders & Dividers */
+  --color-border:        rgba(99, 102, 241, 0.14);
+  --color-border-hover:  rgba(99, 102, 241, 0.32);
+
+  /* Primary Brand & Accents */
+  --color-primary:       #4f46e5;
+  --color-primary-soft:  rgba(79, 70, 229, 0.1);
+  --color-primary-glow:  rgba(79, 70, 229, 0.2);
+
+  --color-accent:        #0284c7;
+  --color-accent-soft:   rgba(2, 132, 199, 0.1);
+
+  /* Status Colors */
+  --color-success:       #059669;
+  --color-warning:       #d97706;
+  --color-danger:        #dc2626;
+
+  /* Text & Typography */
+  --color-text:          #0f172a;
+  --color-text-muted:    #475569;
+  --color-text-subtle:   #64748b;
+
+  /* Gradients */
+  --gradient-primary:     linear-gradient(135deg, #4f46e5 0%, #0284c7 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(79,70,229,0.06), rgba(2,132,199,0.04));
+  --gradient-user-bubble: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(79,70,229,0.05) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(2,132,199,0.04) 0%, transparent 60%);
+
+  /* Glass & Overlays */
+  --glass-bg:            rgba(255, 255, 255, 0.85);
+  --glass-border:        1px solid rgba(226, 232, 240, 0.9);
+  --glass-blur:          blur(12px);
+  --drawer-overlay-bg:   rgba(15, 23, 42, 0.35);
+  --modal-overlay-bg:    rgba(15, 23, 42, 0.6);
+
+  /* Code Blocks */
+  --code-bg:             #f1f5f9;
+  --code-border:         #e2e8f0;
+  --code-text:           #0f172a;
+
+  /* Shadows */
+  --shadow-sm:           0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md:           0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:           0 8px 40px rgba(0,0,0,0.12);
+  --shadow-glow:         0 0 24px rgba(79,70,229,0.18);
+  --scrollbar-thumb:     rgba(79, 70, 229, 0.25);
+  --scrollbar-thumb-hover: rgba(79, 70, 229, 0.45);
 }
 
 /* ── Reset & Base ─────────────────────────────────────────── */
@@ -95,17 +174,18 @@ body {
   color: var(--color-text);
   min-height: 100vh;
   line-height: 1.6;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 /* ── Scrollbars ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── Focus / Accessibility ────────────────────────────────── */

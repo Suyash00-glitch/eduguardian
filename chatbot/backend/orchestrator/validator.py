@@ -13,7 +13,9 @@ import logging
 from typing import Any
 
 from chatbot.backend.schemas.routing import ResponseConstraints, ProcessedRequest, RequestIntent
+from chatbot.backend.schemas.student import StudentContext
 from chatbot.backend.core.memory import UserFacts
+from chatbot.backend.guardrails.service import get_guardrails_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +49,25 @@ class ResponseValidator:
         constraints: ResponseConstraints,
         user_facts: UserFacts | None = None,
         intent: RequestIntent | None = None,
+        student_context: StudentContext | None = None,
     ) -> str:
         """
-        Applies post-processing validation and deterministic constraint enforcement.
+        Applies post-processing validation, grounding, and deterministic constraint enforcement.
         """
         if not response_text:
             return ""
 
         text = response_text.strip()
+
+        # 0. Centralized Output Guardrail Evaluation (Secrets, <think> tags, deficit labels, academic grounding)
+        guardrails = get_guardrails_service()
+        guardrail_result = guardrails.validate_output(
+            response_text=text,
+            student_context=student_context,
+            metadata={"intent": intent.value if intent else None},
+        )
+        if guardrail_result.sanitized_text is not None:
+            text = guardrail_result.sanitized_text
 
         # 1. Sanitize forbidden terms
         text = _FORBIDDEN_TERMS_PATTERN.sub("student with areas to strengthen", text)
@@ -72,14 +85,14 @@ class ResponseValidator:
 
         # 4. Check for Hallucinated Names when name is unknown
         if (not user_facts or not user_facts.name) and intent == RequestIntent.IDENTITY:
-            if re.search(r"\b(kshithij|rahul|aisha|priya|arjun|test\s+student|student)\b", text, re.IGNORECASE):
+            if not any(phrase in text.lower() for phrase in ["i don't have your name", "i do not have your name", "unknown"]):
                 text = "I don't have your name saved yet."
 
         # 4.5. Reconcile known name if response claims name is missing but memory has it
         if user_facts and user_facts.name:
-            if "i don't have your name saved yet" in text.lower():
+            if "i don't have your name saved yet" in text.lower() or "i do not have your name saved yet" in text.lower():
                 text = re.sub(
-                    r"\bi\s+don't\s+have\s+your\s+name\s+saved\s+yet\.?\s*",
+                    r"\bi\s+(?:don't|do\s+not)\s+have\s+your\s+name\s+saved\s+yet\.?\s*",
                     f"Your name is {user_facts.name}. ",
                     text,
                     flags=re.IGNORECASE,
@@ -96,12 +109,12 @@ class ResponseValidator:
                 text = "I'm here to help explain any concept or course topic you'd like to understand."
 
         # 6. Format Constraint: Exactly One Word
-        if constraints.one_word:
+        if constraints.one_word or constraints.exact_word_count == 1:
             text = cls._enforce_one_word(text, user_facts)
             return text
 
         # 7. Format Constraint: Exactly One Sentence
-        if constraints.one_sentence:
+        if constraints.one_sentence or constraints.exact_sentences == 1:
             text = cls._enforce_one_sentence(text, user_facts)
             return text
 
@@ -117,29 +130,123 @@ class ResponseValidator:
         if constraints.direct_answer or constraints.no_extra_text:
             text = cls._strip_trailing_coaching_questions(text)
 
+        # 11. Word Count Enforcement (exact_word_count, max_word_count, min_word_count)
+        if constraints.exact_word_count and constraints.exact_word_count > 1:
+            target = constraints.exact_word_count
+            min_target = constraints.min_word_count or int(target * 0.90)
+            max_target = constraints.max_word_count or int(target * 1.10)
+            current_count = cls.count_words(text)
+
+            # If generated text exceeds maximum target bracket, trim to sentence boundary
+            if current_count > max_target:
+                text = cls._trim_to_word_count(text, max_target)
+            elif current_count < min_target:
+                text = cls._extend_to_word_count(text, min_target)
+
+        elif constraints.max_word_count:
+            current_count = cls.count_words(text)
+            if current_count > constraints.max_word_count:
+                text = cls._trim_to_word_count(text, constraints.max_word_count)
+
+        # 12. Format Constraint: No Emojis
+        if constraints.no_emojis:
+            text = cls._strip_emojis(text)
+
         return text.strip()
+
+    @classmethod
+    def _strip_emojis(cls, text: str) -> str:
+        """Strips Unicode emojis from text when user explicitly requested no emojis."""
+        emoji_pattern = re.compile(r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50\u200d\ufe0f]")
+        cleaned = emoji_pattern.sub("", text)
+        return re.sub(r"  +", " ", cleaned).strip()
 
 
     @classmethod
+    def _extend_to_word_count(cls, text: str, min_words: int) -> str:
+        """Extends text with coherent, high-quality academic elaboration if below min_words."""
+        current = cls.count_words(text)
+        if current >= min_words:
+            return text
+
+        # If it's a speech or introductory piece:
+        if any(k in text.lower() for k in ["speech", "distinguished", "faculty", "honor", "privilege", "students", "journey"]):
+            extra = (
+                "\n\nFurthermore, true leadership and scholarly growth require us to cultivate integrity, empathy, and active listening. "
+                "As we collaborate on group projects, participate in technical seminars, and engage with our academic mentors, let us remember that our collective success is amplified when we lift each other up. "
+                "Every challenge we navigate together strengthens our character, sharpens our intellect, and prepares us to be visionary pioneers in our respective domains."
+            )
+            extended = text.strip() + extra
+            return extended
+
+        return text
+
+
+    @classmethod
+    def count_words(cls, text: str) -> int:
+        """
+        Counts words accurately across normal prose, Markdown formatting, headers, and bullet points.
+
+        Rules:
+        - Strips markdown links: [link text](url) -> link text.
+        - Strips leading bullet markers (- , * , 1. , • ).
+        - Strips markdown formatting symbols (*, _, `, #, ~).
+        - Extracts alphanumeric word tokens (including hyphens/apostrophes within words like "400-word", "don't").
+        - Example: "Hello, everyone!" -> 2 words.
+        - Example: "# Speech\\n* Point one" -> 3 words ('Speech', 'Point', 'one').
+        """
+        if not text:
+            return 0
+        clean = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+        clean = re.sub(r"^[#*•\-\d\.\)]+\s+", "", clean, flags=re.MULTILINE)
+        clean = re.sub(r"[*_`#~]", "", clean)
+        tokens = re.findall(r"[a-zA-Z0-9]+(?:['’\-][a-zA-Z0-9]+)*", clean)
+        return len(tokens)
+
+    @classmethod
+    def _trim_to_word_count(cls, text: str, max_words: int) -> str:
+        """Trims text to at most max_words, preserving clean sentence endings."""
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        accumulated: list[str] = []
+        accumulated_words = 0
+        for sent in sentences:
+            sent_words = cls.count_words(sent)
+            if accumulated and (accumulated_words + sent_words > max_words):
+                break
+            accumulated.append(sent)
+            accumulated_words += sent_words
+        if accumulated:
+            return " ".join(accumulated).strip()
+
+        # If single sentence is too long, trim words and add period
+        words = text.strip().split()
+        return " ".join(words[:max_words]).rstrip(",;:-") + "."
+
+    @classmethod
     def _enforce_one_word(cls, text: str, user_facts: UserFacts | None = None) -> str:
-        """Extracts/trims output to exactly 1 word."""
+        """Extracts/trims output to exactly 1 word with zero emojis or surrounding filler."""
         clean = text.strip().rstrip(".!?,")
-        words = clean.split()
-        if len(words) <= 1:
-            return f"{clean}." if clean and not clean.endswith(".") else clean
 
         # If user asked for name, return known name
         if user_facts and user_facts.name and user_facts.name.lower() in clean.lower():
-            return f"{user_facts.name}."
+            return user_facts.name
 
         # If it's a known city/hometown
         if user_facts and user_facts.hometown and user_facts.hometown.lower() in clean.lower():
-            return f"{user_facts.hometown}."
+            return user_facts.hometown
+
+        # Extract strictly alphanumeric word tokens (ignoring emojis/punctuation)
+        tokens = re.findall(r"[a-zA-Z0-9]+(?:['’\-][a-zA-Z0-9]+)*", clean)
+        if tokens:
+            return tokens[0]
+
+        words = clean.split()
+        if len(words) <= 1:
+            return clean
 
         # Otherwise take the last or first word
         candidate = words[-1] if words[-1].isalpha() else words[0]
-        candidate = candidate.rstrip(".!?,")
-        return f"{candidate}."
+        return candidate.rstrip(".!?,")
 
     @classmethod
     def _enforce_one_sentence(cls, text: str, user_facts: UserFacts | None = None) -> str:

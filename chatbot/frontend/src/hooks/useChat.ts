@@ -97,12 +97,25 @@ export function useChat() {
           onMeta: (meta) => {
             if (meta.conversation_id) {
               conversationIdRef.current = meta.conversation_id;
-              setState(prev => ({
-                ...prev,
-                conversationId: meta.conversation_id,
-                studyPlan: meta.study_plan ?? prev.studyPlan,
-              }));
             }
+            setState(prev => {
+              const updatedMessages = prev.messages.map(m => {
+                if (m.id === assistantMsgId) {
+                  return {
+                    ...m,
+                    id: meta.message_id || m.id,
+                    created_at: meta.created_at || m.created_at,
+                  };
+                }
+                return m;
+              });
+              return {
+                ...prev,
+                conversationId: meta.conversation_id || prev.conversationId,
+                messages: updatedMessages,
+                studyPlan: meta.study_plan ?? prev.studyPlan,
+              };
+            });
           },
           onError: (err) => {
             setState(prev => ({

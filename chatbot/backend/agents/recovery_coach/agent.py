@@ -13,6 +13,8 @@ from typing import Any
 
 from chatbot.backend.agents.recovery_coach.prompts import (
     build_recovery_coach_user_prompt,
+    build_teach_me_prompt,
+    build_quiz_prompt,
     get_system_prompt,
     resolve_student_name,
     get_curated_resources_for_text,
@@ -24,6 +26,7 @@ from chatbot.backend.agents.recovery_coach.prompts import (
     _detect_resource_link_request,
     _detect_direct_task_request,
     _detect_no_extra_constraint,
+    _detect_educational_concept,
 )
 from chatbot.backend.core.memory import (
     UserFacts,
@@ -35,9 +38,16 @@ from chatbot.backend.core.memory import (
     is_existential_user_query,
     is_clarification_user_query,
 )
+from chatbot.backend.orchestrator.adaptive_quiz import adapt_quiz_difficulty
+from chatbot.backend.orchestrator.adaptive_teaching import (
+    is_confusion_signal,
+    adapt_teaching_support,
+    get_strategy_name,
+)
 
 from chatbot.backend.schemas.coach import CoachRequest, CoachResponse, CoachMessageItem
 from chatbot.backend.schemas.routing import ResponseConstraints
+from chatbot.backend.orchestrator.router import detect_constraints
 from chatbot.backend.orchestrator.validator import ResponseValidator
 from chatbot.backend.llm.base import BaseLLMClient
 from chatbot.backend.llm.omniroute import create_llm_client
@@ -72,8 +82,13 @@ class RecoveryCoachAgent:
 
     @staticmethod
     def sanitize_response(text: str) -> str:
-        """Post-processes LLM text to ensure no forbidden negative labels leak to students."""
-        cleaned = _FORBIDDEN_TERMS_PATTERN.sub("student with areas to strengthen", text)
+        """Post-processes LLM text to ensure no forbidden negative labels or think tags leak to students."""
+        cleaned = text
+        if "<think>" in cleaned and "</think>" in cleaned:
+            cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+        elif "<think>" in cleaned:
+            cleaned = re.sub(r"^<think>.*?(?:\n\n|\Z)", "", cleaned, flags=re.DOTALL).strip()
+        cleaned = _FORBIDDEN_TERMS_PATTERN.sub("student with areas to strengthen", cleaned)
         return cleaned
 
     async def recover(self, request: CoachRequest) -> CoachResponse:
@@ -111,29 +126,67 @@ class RecoveryCoachAgent:
         if request.student_insight and request.student_insight.support_intensity:
             support_intensity = request.student_insight.support_intensity
 
+        is_teach_me = (
+            getattr(request, "response_mode", None) == "teach_me"
+            or (isinstance(request.teaching_state, dict) and request.teaching_state.get("active"))
+        )
+
+        is_quiz_mode = (
+            getattr(request, "response_mode", None) == "quiz_me"
+            or (isinstance(request.quiz_state, dict) and request.quiz_state.get("active"))
+        )
+
         system_prompt = get_system_prompt(support_intensity)
-        user_prompt = build_recovery_coach_user_prompt(request)
+        if is_quiz_mode:
+            user_prompt = build_quiz_prompt(request, user_facts, resolved_name, request.quiz_state)
+        elif is_teach_me:
+            t_dict = dict(request.teaching_state or {})
+            student_msg_raw = (request.resolved_user_message or request.user_message).strip()
+            # If student expresses confusion or asks for re-explanation, adapt support level
+            if is_confusion_signal(student_msg_raw):
+                curr_lvl = int(t_dict.get("support_level", 0))
+                next_lvl = adapt_teaching_support(curr_lvl, is_confusion=True)
+                t_dict["support_level"] = next_lvl
+                t_dict["confusion_count"] = int(t_dict.get("confusion_count", 0)) + 1
+                t_dict["support_strategy"] = get_strategy_name(next_lvl)
+            user_prompt = build_teach_me_prompt(request, user_facts, resolved_name, t_dict)
+        else:
+            user_prompt = build_recovery_coach_user_prompt(request)
         suggested_followups: list[str] = []
 
         # Calibrate temperature and token limits dynamically based on format modifier and query complexity
-        user_msg = request.user_message.lower().strip()
-        format_mod = _detect_format_modifier(request.user_message)
-        no_extra = _detect_no_extra_constraint(request.user_message) or format_mod == "no_extra"
+        user_msg = (request.resolved_user_message or request.user_message).lower().strip()
+        format_mod = _detect_format_modifier(user_msg)
+        constraints_dict = request.constraints or {}
+        constraints = ResponseConstraints(**constraints_dict) if constraints_dict else detect_constraints(user_msg)
+        no_extra = _detect_no_extra_constraint(user_msg) or format_mod == "no_extra" or constraints.no_extra_text
 
-        is_name_q = is_name_query(request.user_message)
-        is_hometown_q = is_hometown_query(request.user_message)
-        is_ai_origin_q = is_ai_origin_query(request.user_message)
-        is_math = _detect_math_or_simple_qa(request.user_message)
-        is_focus = _detect_academic_focus_request(request.user_message)
-        is_progress = _detect_progress_request(request.user_message)
-        is_resource_link = _detect_resource_link_request(request.user_message)
-        is_direct_task = _detect_direct_task_request(request.user_message)
-        is_complex = _detect_complex_detailed_request(request.user_message) or bool(request.study_plan)
-        is_greeting = bool(re.search(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening))\b", user_msg)) and not (user_msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math)
+        is_name_q = is_name_query(user_msg)
+        is_hometown_q = is_hometown_query(user_msg)
+        is_ai_origin_q = is_ai_origin_query(user_msg)
+        is_math = _detect_math_or_simple_qa(user_msg)
+        is_focus = _detect_academic_focus_request(user_msg)
+        is_progress = _detect_progress_request(user_msg)
+        is_resource_link = _detect_resource_link_request(user_msg)
+        is_direct_task = _detect_direct_task_request(user_msg)
+        is_educational = _detect_educational_concept(user_msg)
+        is_complex = _detect_complex_detailed_request(user_msg) or bool(request.study_plan)
+        is_greeting = bool(re.search(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening))\b", user_msg)) and not (user_msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math or is_educational or is_teach_me or is_quiz_mode)
 
         is_compound_concept_name = ("operating system" in user_msg or "neural network" in user_msg) and ("name" in user_msg or "who am i" in user_msg)
+        learning_prefs = (request.learning_history or {}).get("explicit_preferences", {})
+        is_concise_pref = learning_prefs.get("verbosity") == "concise" and not is_complex
 
-        if format_mod == "one_word":
+        if constraints.exact_word_count and constraints.exact_word_count > 1:
+            call_temp = 0.5
+            token_limit = max(int(constraints.exact_word_count * 2.2), 800)
+        elif constraints.min_word_count and constraints.min_word_count > 50:
+            call_temp = 0.5
+            token_limit = max(int(constraints.min_word_count * 2.2), 800)
+        elif constraints.max_word_count:
+            call_temp = 0.2
+            token_limit = max(int(constraints.max_word_count * 1.6), 80)
+        elif format_mod == "one_word" or constraints.one_word:
             call_temp = 0.0
             token_limit = 10
         elif is_compound_concept_name:
@@ -142,37 +195,45 @@ class RecoveryCoachAgent:
         elif is_name_q or is_hometown_q or is_ai_origin_q:
             call_temp = 0.0
             token_limit = 25
-
         elif is_math:
             call_temp = 0.0
             token_limit = 25
-        elif format_mod == "one_sentence":
+        elif format_mod == "short_direct" or format_mod == "one_sentence" or constraints.one_sentence:
             call_temp = 0.1
-            token_limit = 45
+            token_limit = 60
         elif is_focus or is_progress:
             call_temp = 0.1
             token_limit = 60
-        elif format_mod == "three_points":
+        elif format_mod == "three_points" or constraints.exact_items == 3:
             call_temp = 0.2
             token_limit = 180
-        elif is_resource_link:
+        elif is_resource_link or constraints.links_only:
             call_temp = 0.1
             token_limit = 150
+        elif is_quiz_mode:
+            call_temp = 0.3
+            token_limit = 450
+        elif is_teach_me:
+            call_temp = 0.3
+            token_limit = 450
         elif no_extra and is_direct_task:
             call_temp = 0.2
             token_limit = 350
         elif is_direct_task:
             call_temp = 0.3
-            token_limit = 450
+            token_limit = 500
         elif is_greeting:
             call_temp = 0.2
             token_limit = 40
         elif is_complex:
             call_temp = 0.5
             token_limit = 1024
-        else:
+        elif is_concise_pref:
             call_temp = 0.3
             token_limit = 200
+        else:
+            call_temp = 0.3
+            token_limit = 350
 
         try:
             raw_text = await self._llm_client.complete_simple(
@@ -184,8 +245,6 @@ class RecoveryCoachAgent:
 
             # Sanitize and validate response format
             safe_text = self.sanitize_response(raw_text)
-            constraints_dict = request.constraints or {}
-            constraints = ResponseConstraints(**constraints_dict) if constraints_dict else ResponseConstraints()
             validated_text = ResponseValidator.validate_and_enforce(
                 response_text=safe_text,
                 constraints=constraints,
@@ -196,7 +255,127 @@ class RecoveryCoachAgent:
 
             # Determine suggested quick followup prompts only when appropriate (not for 1-word or strict formats)
             suggested_followups = []
-            if not format_mod and not is_name_q and not is_hometown_q and not is_math and not is_greeting and not constraints.one_word and not constraints.one_sentence and not constraints.no_extra_text:
+            updated_teaching_state: dict[str, Any] | None = None
+            updated_quiz_state: dict[str, Any] | None = None
+
+            if is_quiz_mode:
+                q_dict = dict(request.quiz_state or {})
+                q_dict["active"] = True
+                curr_num = int(q_dict.get("current_question_number", 1))
+                total_q = int(q_dict.get("total_questions", 5))
+                had_active_q = bool(q_dict.get("current_question_text"))
+
+                if had_active_q:
+                    # 1. Evaluate previous question answer
+                    eval_header = validated_text[:140].lower()
+                    if re.search(r"\b(correct|spot on|exactly right|great job|well done|excellent|right!|you got it)\b", eval_header):
+                        pts = 1.0
+                        is_corr = True
+                        eval_enum = "correct"
+                    elif re.search(r"\b(partially correct|half right|almost right|part of your answer)\b", eval_header):
+                        pts = 0.5
+                        is_corr = False
+                        eval_enum = "partially_correct"
+                    else:
+                        pts = 0.0
+                        is_corr = False
+                        eval_enum = "incorrect"
+
+                    # Mathematically calculate and update score
+                    current_score = float(q_dict.get("score", 0.0)) + pts
+                    q_dict["score"] = round(current_score, 1)
+                    q_dict["last_evaluation"] = eval_enum
+                    q_dict["last_student_answer"] = request.user_message
+
+                    # Within-quiz adaptive difficulty progression
+                    curr_diff = q_dict.get("difficulty", "beginner")
+                    recent_evals = list(q_dict.get("recent_evaluations") or [])
+                    next_diff = adapt_quiz_difficulty(curr_diff, is_corr, recent_evals)
+                    recent_evals.append(is_corr)
+                    q_dict["recent_evaluations"] = recent_evals
+                    q_dict["difficulty"] = next_diff.value
+                    diff_hist = list(q_dict.get("difficulty_history") or [])
+                    diff_hist.append(next_diff.value)
+                    q_dict["difficulty_history"] = diff_hist
+
+                    record = {
+                        "question_number": curr_num,
+                        "question_text": q_dict.get("current_question_text", ""),
+                        "question_type": q_dict.get("current_question_type", "multiple_choice"),
+                        "student_answer": request.user_message,
+                        "is_correct": is_corr,
+                        "score_awarded": pts,
+                        "explanation": "",
+                    }
+                    history_list = list(q_dict.get("history") or [])
+                    history_list.append(record)
+                    q_dict["history"] = history_list
+
+                    if curr_num >= total_q:
+                        # Completed!
+                        q_dict["step"] = "completed"
+                        q_dict["active"] = False
+                        q_dict["current_question_text"] = None
+                        q_dict["current_options"] = None
+                        suggested_followups.extend(["📝 Make me a study plan", "🧠 Quiz me on another topic", "🌱 Teach me another topic"])
+                    else:
+                        q_dict["current_question_number"] = curr_num + 1
+
+                # If not completed, extract new question & options
+                if q_dict.get("step") != "completed":
+                    opt_matches = re.findall(r"([A-D]\.\s+[^\n]+)", validated_text)
+                    if opt_matches:
+                        q_dict["current_options"] = [opt.strip() for opt in opt_matches[:4]]
+                        q_dict["current_question_type"] = "multiple_choice"
+
+                    q_match = re.search(r"(Question\s+\d+[^A-D\n]+(?:\n[^\nA-D]+)*?\?)", validated_text, re.IGNORECASE)
+                    if q_match:
+                        q_dict["current_question_text"] = q_match.group(1).strip()
+                    elif "?" in validated_text:
+                        parts = validated_text.split("?")
+                        q_dict["current_question_text"] = (parts[-2].split("\n")[-1] + "?").strip()
+
+                    q_dict["step"] = "in_progress"
+                    q_dict["active"] = True
+                    suggested_followups.extend(["A", "B", "C", "D", "🛑 Stop quiz"])
+
+                # Ensure current_correct_answer is NEVER leaked
+                q_dict.pop("current_correct_answer", None)
+                updated_quiz_state = q_dict
+
+            elif is_teach_me:
+                t_dict = dict(request.teaching_state or {})
+                t_dict["active"] = True
+                t_dict["last_student_answer"] = request.user_message
+
+                # Update adaptive support level and strategy
+                student_msg_raw = (request.resolved_user_message or request.user_message).strip()
+                if is_confusion_signal(student_msg_raw):
+                    curr_lvl = int(t_dict.get("support_level", 0))
+                    next_lvl = adapt_teaching_support(curr_lvl, is_confusion=True)
+                    t_dict["support_level"] = next_lvl
+                    t_dict["confusion_count"] = int(t_dict.get("confusion_count", 0)) + 1
+                    t_dict["support_strategy"] = get_strategy_name(next_lvl)
+                else:
+                    t_dict.setdefault("support_level", 0)
+                    t_dict.setdefault("confusion_count", 0)
+                    t_dict["support_strategy"] = get_strategy_name(int(t_dict["support_level"]))
+
+                # Extract checking question from output
+                all_questions = re.findall(r"(?:^|\n|[.!?]\s+)([^.!?\n]+(?:\?|🧠))", validated_text)
+                if all_questions:
+                    t_dict["current_question"] = all_questions[-1].strip()
+                elif "?" in validated_text:
+                    t_dict["current_question"] = validated_text.split("?")[-2].split("\n")[-1].strip() + "?"
+                t_dict["step"] = "awaiting_answer"
+                updated_teaching_state = t_dict
+
+                suggested_followups.append("💡 Explain that again")
+                suggested_followups.append("⏭️ Continue to next concept")
+                suggested_followups.append("🛑 Stop teaching")
+
+
+            elif not format_mod and not is_name_q and not is_hometown_q and not is_math and not is_greeting and not constraints.one_word and not constraints.one_sentence and not constraints.no_extra_text:
                 if request.study_plan:
                     suggested_followups.append("📋 Show my full timetable")
                     suggested_followups.append("💡 Tips for staying on track")
@@ -210,145 +389,199 @@ class RecoveryCoachAgent:
                 study_plan=request.study_plan,
                 suggested_followups=suggested_followups,
                 resources=request.study_plan.resources if request.study_plan else [],
+                teaching_state=updated_teaching_state,
+                quiz_state=updated_quiz_state,
                 metadata={"support_intensity": support_intensity},
             )
 
         except Exception as exc:
-            logger.warning("RecoveryCoachAgent: Live LLM completion unavailable (%s). Using contextual response.", exc)
-            first_name = resolved_name
+            logger.warning("RecoveryCoachAgent: Live LLM completion unavailable (%s). Using safe baseline fallback.", exc)
+            name_str = f", {resolved_name}" if resolved_name else ""
 
-            # Direct rule-based fallback responses matching user instructions
-            if format_mod == "one_word":
-                fallback_text = first_name if first_name else "Unknown."
-            elif is_system_architecture_query(user_msg):
-                fallback_text = (
-                    "You currently have three agents:\n"
-                    "1. Student Insight Agent — Analyzes academic performance and focus areas internally.\n"
-                    "2. Study Planner Agent — Generates structured, actionable weekly study schedules.\n"
-                    "3. Recovery Coach Agent — Delivers supportive, personalized conversational coaching."
-                )
-            elif is_existential_user_query(user_msg):
-                fallback_text = "That's a deeper question. If you mean your academic goals or purpose as a student, we can explore that together."
-            elif is_clarification_user_query(user_msg):
-                fallback_text = "Understood! As a student, you're here to build your skills, work toward your degree, and achieve your academic goals. We can focus on whichever area you'd like to explore."
-            elif "operating system" in user_msg and "name" in user_msg:
-                os_def = "An operating system is system software that manages computer hardware, software resources, and provides common services for computer programs."
-                if first_name:
-                    fallback_text = f"Your name is {first_name}. {os_def}"
-                else:
-                    fallback_text = f"I don't have your name saved yet. {os_def}"
-            elif "operating system" in user_msg or "what is an operating system" in user_msg:
-                fallback_text = "An operating system is system software that manages computer hardware, software resources, and provides common services for computer programs."
-            elif is_hometown_q:
-                if user_facts.hometown:
-                    fallback_text = f"{user_facts.hometown}."
-                else:
-                    fallback_text = "I don't have your hometown information yet."
-            elif is_ai_origin_q:
-                fallback_text = "I am EduGuardian, an AI academic assistant built to support university students."
-            elif is_name_q:
-                if not first_name:
-                    fallback_text = "I don't have your name saved yet."
-                elif any(k in user_msg for k in ["u dint say", "you didnt say", "you didn't say"]):
-                    fallback_text = f"You're right — your name is {first_name}."
-                elif any(k in user_msg for k in ["but i said", "i said my name"]):
-                    fallback_text = f"Yes, you said your name is {first_name}."
-                else:
-                    fallback_text = f"{first_name}."
-            elif is_greeting:
-                fallback_text = f"Hi {first_name}! How can I help you today?" if first_name else "Hi! How can I help you today?"
-            elif "capital of india" in user_msg:
-                fallback_text = "New Delhi."
-            elif any(k in user_msg for k in ["2 + 2", "2+2"]):
-                fallback_text = "4."
-            elif is_resource_link:
-                links = get_curated_resources_for_text(user_msg)
-                fallback_text = "\n".join([f"{i+1}. {l}" for i, l in enumerate(links[:3])])
-
-            elif format_mod == "one_sentence" or "in 1 sentence" in user_msg or "in one sentence" in user_msg:
-                if "name" in user_msg and "study" in user_msg:
-                    fallback_text = f"Your name is {first_name}, and you're currently interested in learning Neural Networks."
-                else:
-                    fallback_text = "Data structures are specialized formats for organizing, processing, and storing data efficiently."
-            elif format_mod == "three_points" or "3 ways" in user_msg or "3 points" in user_msg:
-                fallback_text = (
-                    "• Focus on daily practice for core topics like Data Structures.\n"
-                    "• Maintain regular attendance across all scheduled sessions.\n"
-                    "• Complete and submit all assignments on time."
-                )
-            elif "attendance" in user_msg and request.student_context and request.student_context.attendance:
-                pct = request.student_context.attendance.overall_percentage or 67.0
-                fallback_text = f"Your current attendance is {pct:.0f}%."
-            elif request.study_plan or "study plan" in user_msg or "schedule" in user_msg:
-                plan_title = request.study_plan.title if request.study_plan else "Personalized Study Schedule"
+            # 1. Attached Study Plan Presentation
+            if request.study_plan:
+                plan_title = request.study_plan.title or "Personalized Study Schedule"
                 fallback_text = (
                     f"I've put together a personalized study plan: \"{plan_title}\"! 🎯 "
                     "Click on **View Active Study Plan** above to review your schedule and check off tasks as you complete them."
                 )
+
+            # 2. Identity Name Inquiry
+            elif is_name_q:
+                if resolved_name:
+                    fallback_text = f"{resolved_name}." if format_mod == "one_word" else f"Your name is {resolved_name}."
+                else:
+                    fallback_text = "Unknown." if format_mod == "one_word" else "I don't have your name saved yet."
+
+            # 3. Hometown Inquiry
+            elif is_hometown_q:
+                if user_facts.hometown:
+                    fallback_text = f"{user_facts.hometown}." if format_mod == "one_word" else f"You're from {user_facts.hometown}."
+                else:
+                    fallback_text = "I don't have your hometown information yet."
+
+            # 4. Direct Attendance Inquiry
+            elif "attendance" in user_msg and any(kw in user_msg for kw in ["what", "my", "percentage", "how much"]):
+                if request.student_context and request.student_context.attendance and request.student_context.attendance.overall_percentage is not None:
+                    pct = request.student_context.attendance.overall_percentage
+                    fallback_text = f"Your current attendance is {pct:.0f}%."
+                else:
+                    fallback_text = "I don't have your attendance records available right now."
+
+            # 5. Focus Area Inquiry
             elif is_focus:
-                focus_subj = "Data Structures"
-                if request.student_context and request.student_context.subjects:
+                focus_subj = None
+                if request.student_insight and request.student_insight.focus_areas:
+                    for fa in request.student_insight.focus_areas:
+                        if "attendance" not in fa.lower():
+                            focus_subj = fa
+                            break
+                if not focus_subj and request.student_context and request.student_context.subjects:
                     sorted_subs = sorted(
                         [s for s in request.student_context.subjects if s.current_marks_percentage is not None],
                         key=lambda x: x.current_marks_percentage or 0,
                     )
                     if sorted_subs:
                         focus_subj = sorted_subs[0].subject_name
-                elif request.student_insight and request.student_insight.focus_areas:
-                    for fa in request.student_insight.focus_areas:
-                        if "attendance" not in fa.lower():
-                            focus_subj = fa
-                            break
-                fallback_text = f"{focus_subj} would be the main priority right now."
-            elif is_progress or "am i doing well" in user_msg or "how am i doing" in user_msg:
-                focus_subj = "Data Structures"
-                if request.student_context and request.student_context.subjects:
-                    sorted_subs = sorted(
-                        [s for s in request.student_context.subjects if s.current_marks_percentage is not None],
-                        key=lambda x: x.current_marks_percentage or 0,
+                if focus_subj:
+                    fallback_text = f"{focus_subj} would be the main priority right now."
+                else:
+                    fallback_text = "I don't have your academic records available right now to determine a focus subject. Which topic would you like to work on?"
+
+            # 6. Progress Status Inquiry
+            elif is_progress or any(k in user_msg for k in ["how am i doing", "am i doing well", "my progress", "my performance"]):
+                if request.student_insight and request.student_insight.overall_summary:
+                    fallback_text = request.student_insight.overall_summary
+                elif request.student_context and request.student_context.subjects:
+                    subs_summary = ", ".join([f"{s.subject_name} ({s.current_marks_percentage or 0:.0f}%)" for s in request.student_context.subjects[:3] if s.current_marks_percentage is not None])
+                    fallback_text = f"Here is your current course standing: {subs_summary}."
+                else:
+                    fallback_text = "I don't have your academic performance records available right now. How are you feeling about your current courses?"
+
+            # 7. Emotional Support & Stress Guidance
+            elif any(k in user_msg for k in ["stress", "anxious", "anxiety", "depress", "depressed", "depression", "overwhelm", "overwhelmed", "worry", "scared", "tired", "hopeless"]):
+                fallback_text = (
+                    f"It's completely natural to feel challenged when working through demanding subjects{name_str}. "
+                    "Taking one manageable step at a time and focusing on regular practice will help you build momentum and confidence."
+                )
+
+            # 8. Student Self-Doubt, Purpose, Motivation & Open-Ended Conversation
+            elif any(k in user_msg for k in ["college", "university", "why study", "why will i study", "why am i studying", "worth it", "for me"]):
+                fallback_text = (
+                    "College can give you a foundation for the career and opportunities you want later, "
+                    "but it's also okay to question whether what you're studying feels meaningful to you. "
+                    "If you're unsure about your direction, we can figure out what you're hoping to get from college and work backward from there."
+                )
+
+            elif any(k in user_msg for k in ["able to study", "capable", "can i improve", "can i really improve", "will i ever", "can i pass", "can i succeed", "can i still do well", "can i recover"]):
+                fallback_text = (
+                    "Yes, you can improve your ability to study and succeed in your courses. "
+                    "You don't need to become highly productive overnight—start with one manageable study session today and build consistency from there."
+                )
+
+            elif any(k in user_msg for k in ["what if i fail", "fear of failing", "afraid of failing", "failing"]):
+                fallback_text = (
+                    "Worrying about failure is a common feeling when facing demanding academic coursework. "
+                    "Instead of focusing on the outcome, break down what you need to cover into small, specific topics and tackle them one step at a time."
+                )
+
+            elif any(k in user_msg for k in ["motivation", "feel like studying", "lost", "don't know what to do", "difficult", "hard"]):
+                fallback_text = (
+                    f"It's completely natural to have times when studying feels tough or motivation is low{name_str}. "
+                    "Taking a short break and then restarting with just 15–20 minutes on a single manageable topic can help you regain momentum."
+                )
+
+            # 9. Word Count Constraint Fallback
+            elif constraints.exact_word_count and constraints.exact_word_count > 1:
+                name_greeting = f"My name is {resolved_name}." if resolved_name else "I am delighted to stand before you today."
+                if "speech" in user_msg or "introduction" in user_msg:
+                    fallback_text = (
+                        f"Good morning everyone, distinguished faculty members, guests, and fellow students. {name_greeting} "
+                        "It is an absolute honor and a genuine privilege to stand before you today as we gather to celebrate new beginnings, academic milestones, and shared aspirations.\n\n"
+                        "Education has always been the cornerstone of human progress and personal transformation. As university students, we are not merely here to attend lectures, complete assignments, or prepare for semester examinations. "
+                        "Rather, we are here to expand our horizons, question assumptions, develop critical thinking skills, and cultivate the lifelong habits of curiosity, discipline, and perseverance. "
+                        "Every lecture we attend, every laboratory experiment we perform, and every discussion we engage in brings us one step closer to mastering our chosen disciplines and contributing meaningfully to society.\n\n"
+                        "Throughout our academic journey, we will undoubtedly encounter challenging moments, rigorous coursework, complex problem sets, and demanding deadlines. "
+                        "During such times, it is essential to remember that growth occurs precisely at the boundary of our comfort zones. True academic excellence is not defined by effortless perfection, but by our willingness to persist through obstacles, learn from mistakes, and support one another as a cohesive learning community. "
+                        "Collaboration, empathy, and mutual encouragement among peers are just as vital as individual study hours and technical acumen.\n\n"
+                        "Beyond the classroom, university life presents endless opportunities to build lasting friendships, engage in innovative projects, participate in extracurricular initiatives, and develop leadership capabilities. "
+                        "I encourage each of us to take full advantage of these rich resources, seek constructive mentorship from our professors, and remain open to diverse perspectives and innovative paradigms.\n\n"
+                        "In closing, let us approach this academic year with enthusiasm, dedication, and an unwavering commitment to excellence. "
+                        "Let us strive not only to succeed for ourselves, but to uplift our community and make our university proud. "
+                        "Thank you very much for your kind attention, and I wish everyone an inspiring, productive, and memorable semester ahead!"
                     )
-                    if sorted_subs:
-                        focus_subj = sorted_subs[0].subject_name
-                elif request.student_insight and request.student_insight.focus_areas:
-                    for fa in request.student_insight.focus_areas:
-                        if "attendance" not in fa.lower():
-                            focus_subj = fa
-                            break
-                fallback_text = f"You're doing well overall, with {focus_subj} as the main area to focus on."
-            elif "how can i improve" in user_msg or "improve" in user_msg:
+                else:
+                    fallback_text = (
+                        "I am here to assist you with comprehensive academic guidance, structured learning plans, and detailed subject explanations. "
+                        "Feel free to share your specific coursework topics or exam preparation goals so we can break them down into effective, step-by-step milestones."
+                    )
+
+            # 10. Format Constraints
+            elif format_mod == "one_word":
+                fallback_text = resolved_name if (resolved_name and is_name_q) else "Understood."
+            elif format_mod == "one_sentence":
+                fallback_text = "I am here to support you with your academic questions, study planning, and learning goals."
+            elif format_mod == "three_points":
                 fallback_text = (
-                    "To improve your performance, focus on consistent daily problem-solving in your core subjects. "
-                    "Reviewing lecture notes regularly and practicing 2–3 problems a day will help build solid confidence."
+                    "• Focus on consistent daily practice in your core courses.\n"
+                    "• Maintain regular attendance across all scheduled lectures.\n"
+                    "• Break complex assignments into small, manageable milestones."
                 )
-            elif is_direct_task or ("neural network" in user_msg and ("plan" in user_msg or "learn" in user_msg)):
+
+            # 11. Greeting Fallback
+            elif is_greeting or any(k in user_msg for k in ["hi", "hello", "hey", "good morning", "good evening", "greetings"]):
+                fallback_text = f"Hello{name_str}! I'm here to support you with your studies and answer any questions. How can I help you today?"
+
+            # 12. General Student Question / Educational Query
+            elif is_educational or any(k in user_msg for k in ["study", "course", "subject", "exam", "class", "degree", "learn", "algorithm", "binary tree", "traversal", "sorting", "variable", "python", "data structure", "tree", "network", "system", "code", "explain", "what is"]):
+                fallback_text = "I'm here to support your learning journey, whether you're exploring concepts like data structures and algorithms, building study motivation, or working through your coursework. What specific topic would you like to explore?"
+
+            # 13. Quiz Mode Fallback
+            elif is_quiz_mode:
+                topic_str = request.quiz_state.get("topic", "your studies") if request.quiz_state else "your studies"
                 fallback_text = (
-                    "1. Master the fundamentals of linear algebra, calculus, and basic Python.\n"
-                    "2. Understand perceptrons, activation functions, and forward propagation.\n"
-                    "3. Learn gradient descent, loss functions, and backpropagation.\n"
-                    "4. Implement a multi-layer perceptron from scratch in PyTorch or TensorFlow.\n"
-                    "5. Explore convolutional and recurrent architectures with practical projects."
+                    f"Let's test your understanding of **{topic_str}**! 🧠\n\n"
+                    f"Question 1:\nWhat is a fundamental property of {topic_str}?\n\n"
+                    "A. It operates strictly in constant time\n"
+                    "B. It organizes and structures related computational data\n"
+                    "C. It only processes alphabetical characters\n"
+                    "D. It cannot be represented in program memory\n\n"
+                    "Your answer?"
                 )
-            elif "neural network" in user_msg or "what is a neural network" in user_msg:
-                fallback_text = "A neural network is a computational model inspired by the human brain, composed of interconnected layers of nodes that process data to recognize complex patterns."
-            elif any(k in user_msg for k in [
-                "stress", "anxious", "anxiety", "depress", "depressed", "depression",
-                "overwhelm", "overwhelmed", "worry", "scared", "tired", "hopeless",
-                "not good at", "failing", "not trusting", "trusting myself", "trust myself",
-                "doubt", "confidence", "give up", "giving up", "cant solve", "can't solve",
-                "not able to", "why do you think", "why do u think", "why do u thing",
-                "believe in myself", "lost", "struggling"
-            ]):
-                fallback_text = (
-                    "It's completely natural to have doubts when facing challenging problems, but problem-solving is a skill that develops with steady practice. "
-                    "You don't have to tackle everything at once—start with one small, manageable problem today and we can build your confidence step by step."
-                )
+
+            # 14. Clarification Fallback (only when truly uninterpretable)
             else:
-                fallback_text = "I'm here to help with your academic questions, study planning, or course topics. What would you like to work on?"
+                fallback_text = "I didn't quite understand what you mean. Are you asking about studying, your academic progress, or something else?"
+
+            # Validate fallback against format constraints
+            constraints_dict = request.constraints or {}
+            constraints = ResponseConstraints(**constraints_dict) if constraints_dict else ResponseConstraints()
+            validated_fallback = ResponseValidator.validate_and_enforce(
+                response_text=fallback_text,
+                constraints=constraints,
+                user_facts=user_facts,
+            )
+
+            fallback_teaching_state = request.teaching_state
+            if is_teach_me and request.teaching_state:
+                t_dict = dict(request.teaching_state or {})
+                t_dict["active"] = True
+                t_dict["last_student_answer"] = request.user_message
+                student_msg_raw = (request.resolved_user_message or request.user_message).strip()
+                if is_confusion_signal(student_msg_raw):
+                    curr_lvl = int(t_dict.get("support_level", 0))
+                    next_lvl = adapt_teaching_support(curr_lvl, is_confusion=True)
+                    t_dict["support_level"] = next_lvl
+                    t_dict["confusion_count"] = int(t_dict.get("confusion_count", 0)) + 1
+                    t_dict["support_strategy"] = get_strategy_name(next_lvl)
+                fallback_teaching_state = t_dict
 
             return CoachResponse(
-                response_text=fallback_text,
+                response_text=validated_fallback,
                 has_study_plan=request.study_plan is not None,
                 study_plan=request.study_plan,
+                teaching_state=fallback_teaching_state,
+                quiz_state=request.quiz_state,
                 suggested_followups=suggested_followups or [],
                 resources=request.study_plan.resources if request.study_plan else [],
                 metadata={"is_fallback": True},

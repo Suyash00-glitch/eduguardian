@@ -26,18 +26,22 @@ class IntentType(str, Enum):
 
 class RequestIntent(str, Enum):
     """Fine-grained semantic category of user request (12 Intent Taxonomy)."""
-    GREETING = "greeting"
-    IDENTITY = "identity"
-    USER_PROFILE = "user_profile"
-    SYSTEM_ARCHITECTURE = "system_architecture"
+    DETERMINISTIC = "deterministic"
     FACTUAL = "factual"
     EDUCATIONAL = "educational"
     RESOURCE_REQUEST = "resource_request"
     ACADEMIC_INSIGHT = "academic_insight"
     STUDY_PLAN = "study_plan"
     EMOTIONAL_SUPPORT = "emotional_support"
+    GENERAL_STUDENT_CONVERSATION = "general_student_conversation"
     GENERAL_CONVERSATION = "general_conversation"
+    IDENTITY = "identity"
+    USER_PROFILE = "user_profile"
+    SYSTEM_ARCHITECTURE = "system_architecture"
+    GREETING = "greeting"
     CLARIFICATION = "clarification"
+    TEACH_ME = "teach_me"
+    QUIZ_ME = "quiz_me"
 
 
 class ResponseMode(str, Enum):
@@ -52,11 +56,14 @@ class ResponseMode(str, Enum):
     SYSTEM_ARCHITECTURE = "system_architecture"# "which agents do I have", "available agents"
     FORMAT_CONSTRAINED = "format_constrained"  # "in 1 word", "in 1 line", "no extra text"
     EDUCATIONAL = "educational"                # "explain X", "how does X work", "what is X"
+    TEACH_ME = "teach_me"                      # Interactive tutoring dialogue ("teach me binary trees")
+    QUIZ_ME = "quiz_me"                        # Interactive quiz session ("quiz me on binary trees")
     TASK_REQUEST = "task_request"              # "give me a plan", "I want to learn X"
     RESOURCE_REQUEST = "resource_request"      # "give me links", "youtube videos"
     ACADEMIC_INSIGHT = "academic_insight"      # "my grades", "how am I doing", "attendance"
     STUDY_PLAN = "study_plan"                 # "create a study plan", "make me a schedule"
-    EMOTIONAL_SUPPORT = "emotional_support"    # "I feel stressed", "depressed about studies"
+    EMOTIONAL_SUPPORT = "emotional_support"    # explicit severe emotional distress
+    GENERAL_STUDENT_CONVERSATION = "general_student_conversation" # open-ended student questions: motivation, doubt, purpose
     CLARIFICATION = "clarification"            # "why am I here", "I asked why I am here"
     CONVERSATIONAL = "conversational"          # greetings, thanks, small talk
 
@@ -64,16 +71,23 @@ class ResponseMode(str, Enum):
 
 class ResponseConstraints(BaseModel):
     """Explicit format and length constraints parsed from user prompt."""
+    exact_word_count: int | None = None
+    min_word_count: int | None = None
+    max_word_count: int | None = None
+    exact_sentences: int | None = None
+    max_sentences: int | None = None
     one_word: bool = False
     one_sentence: bool = False
-    short_answer: bool = False
+    one_line: bool = False
     exact_items: int | None = None
     links_only: bool = False
     no_extra_text: bool = False
+    short_answer: bool = False
     direct_answer: bool = False
     yes_no: bool = False
+    no_emojis: bool = False
+    professional: bool = False
     max_words: int | None = None
-    max_sentences: int | None = None
 
 
 class ProcessedRequest(BaseModel):
@@ -86,6 +100,12 @@ class ProcessedRequest(BaseModel):
     deterministic_answer: str | None = None
     confidence: float = 1.0
     reasoning: str | None = None
+    is_followup: bool = False
+    resolved_message: str | None = None
+    previous_request: str | None = None
+    followup_type: str | None = None
+    teaching_state: Any | None = None
+    quiz_state: Any | None = None
 
 
 class IntentClassification(BaseModel):

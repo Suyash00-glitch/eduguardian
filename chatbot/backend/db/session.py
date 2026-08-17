@@ -60,6 +60,7 @@ class Base(DeclarativeBase):
 async def init_db() -> None:
     """Initialize database tables on startup if they do not exist."""
     try:
+        from chatbot.backend.db import models  # Register all ORM models with Base.metadata
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables initialized successfully.")

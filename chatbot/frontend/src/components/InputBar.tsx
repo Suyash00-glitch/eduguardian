@@ -8,10 +8,11 @@ interface Props {
 }
 
 const QUICK_PROMPTS = [
-  '📋 Make me a study plan',
-  '📊 How am I doing?',
-  '💪 Help me stay motivated',
-  '📖 Help me catch up',
+  { icon: '📋', label: 'Make me a study plan', prompt: 'Make me a study plan' },
+  { icon: '📊', label: 'How am I doing?', prompt: 'How am I doing?' },
+  { icon: '💪', label: 'Help me stay motivated', prompt: 'Help me stay motivated' },
+  { icon: '📚', label: 'Teach me', prompt: 'Teach me' },
+  { icon: '🧠', label: 'Quiz me', prompt: 'Quiz me' },
 ];
 
 export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
@@ -40,7 +41,7 @@ export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
     setValue(e.target.value);
     const ta = e.target;
     ta.style.height = 'auto';
-    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
   };
 
   useEffect(() => {
@@ -50,18 +51,21 @@ export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
   return (
     <div className="input-bar-wrapper">
       {/* Quick prompt chips */}
-      <div className="quick-prompts" role="group" aria-label="Quick prompts">
-        {QUICK_PROMPTS.map((prompt) => (
-          <button
-            key={prompt}
-            className="quick-chip"
-            onClick={() => onSend(prompt.replace(/^[\p{Emoji}\s]+/u, '').trim())}
-            disabled={isLoading || disabled}
-            aria-label={prompt}
-          >
-            {prompt}
-          </button>
-        ))}
+      <div className="quick-prompts-container">
+        <div className="quick-prompts" role="group" aria-label="Quick action chips">
+          {QUICK_PROMPTS.map((item) => (
+            <button
+              key={item.prompt}
+              className="quick-chip"
+              onClick={() => onSend(item.prompt)}
+              disabled={isLoading || disabled}
+              aria-label={item.label}
+            >
+              <span className="quick-chip-icon">{item.icon}</span>
+              <span className="quick-chip-label">{item.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="input-bar">
@@ -72,7 +76,7 @@ export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything — I'm here to help you succeed…"
+          placeholder="Ask EduGuardian anything (e.g., explain a concept, create a schedule, test your knowledge)…"
           rows={1}
           disabled={isLoading || disabled}
           aria-label="Message input"
@@ -88,7 +92,7 @@ export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
           {isLoading ? (
             <span className="send-spinner" aria-hidden="true" />
           ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
@@ -100,3 +104,4 @@ export const InputBar: React.FC<Props> = ({ onSend, isLoading, disabled }) => {
     </div>
   );
 };
+

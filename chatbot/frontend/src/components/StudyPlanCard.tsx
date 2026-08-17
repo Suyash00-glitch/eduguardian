@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { StudyPlan } from '../types';
 import './StudyPlanCard.css';
 
@@ -15,6 +15,14 @@ interface Props {
 }
 
 export const StudyPlanCard: React.FC<Props> = ({ plan, onClose, onToggleTask }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const tasksByDay = (plan.tasks || []).reduce<Record<string, typeof plan.tasks>>((acc, task) => {
     const day = task.day || 'General';
     if (!acc[day]) acc[day] = [];
@@ -27,8 +35,15 @@ export const StudyPlanCard: React.FC<Props> = ({ plan, onClose, onToggleTask }) 
   const totalTasks = (plan.tasks || []).length;
 
   return (
-    <div className="plan-overlay" role="dialog" aria-modal="true" aria-label="Your Study Plan" data-testid="study-plan-card">
-      <div className="plan-card">
+    <div
+      className="plan-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Your Study Plan"
+      data-testid="study-plan-card"
+      onClick={onClose}
+    >
+      <div className="plan-card" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="plan-header">
           <div className="plan-header-left">
@@ -75,6 +90,8 @@ export const StudyPlanCard: React.FC<Props> = ({ plan, onClose, onToggleTask }) 
                   const taskTitle = task.title || task.activity || 'Study Session';
                   const isDone = !!task.completed;
 
+                  const taskSubject = task.subject && task.subject.trim() !== '' && task.subject.toLowerCase() !== 'none' && task.subject.toLowerCase() !== 'null' ? task.subject : 'General Study';
+
                   return (
                     <div
                       key={taskKey}
@@ -97,7 +114,7 @@ export const StudyPlanCard: React.FC<Props> = ({ plan, onClose, onToggleTask }) 
                             {task.priority || 'medium'}
                           </span>
                         </div>
-                        <p className="plan-task-subject">{task.subject}</p>
+                        <p className="plan-task-subject">{taskSubject}</p>
                         <p className={`plan-task-activity ${isDone ? 'strikethrough' : ''}`}>{taskTitle}</p>
                         {task.description && <p className="plan-task-description">{task.description}</p>}
                         <p className="plan-task-duration">⏱ {task.duration_minutes} min</p>

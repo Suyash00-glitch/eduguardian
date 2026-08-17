@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 import httpx
 
@@ -140,6 +141,12 @@ class OmniRouteLLMClient(BaseLLMClient):
                 raise LLMError(f"Malformed LLM response: {data}")
 
             content = choices[0]["message"].get("content", "")
+            # Strip internal reasoning think tags if emitted by reasoning models
+            if "<think>" in content and "</think>" in content:
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+            elif "<think>" in content:
+                content = re.sub(r"^<think>.*?(?:\n\n|\Z)", "", content, flags=re.DOTALL).strip()
+
             model_returned = data.get("model", model)
             usage = data.get("usage")
 
@@ -159,22 +166,41 @@ class OmniRouteLLMClient(BaseLLMClient):
         has_groq = bool(self._groq_api_key and self._groq_api_key not in ("not-configured", "your-groq-api-key-here", ""))
         has_omniroute = bool(self._omniroute_api_key and self._omniroute_api_key not in ("not-configured", "your-omniroute-api-key-here", ""))
 
+        clean_groq_primary = self._groq_model.split("groq/")[-1] if self._groq_model.startswith("groq/") else self._groq_model
+        groq_models = [clean_groq_primary]
+        for fallback_m in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]:
+            clean_m = fallback_m.split("groq/")[-1] if fallback_m.startswith("groq/") else fallback_m
+            if clean_m not in groq_models:
+                groq_models.append(clean_m)
+
         if self._provider == "groq":
             if has_groq:
-                endpoints_to_try.append(("Direct Groq", self._groq_base_url, self._groq_api_key, self._groq_model, self._groq_timeout))
-            elif has_omniroute:
+                for gm in groq_models:
+                    endpoints_to_try.append((f"Direct Groq ({gm})", self._groq_base_url, self._groq_api_key, gm, self._groq_timeout))
+            if has_omniroute:
                 endpoints_to_try.append(("OmniRoute", self._omniroute_base_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
+                if "localhost" in self._omniroute_base_url:
+                    docker_url = self._omniroute_base_url.replace("localhost", "host.docker.internal")
+                    endpoints_to_try.append(("OmniRoute (Docker host)", docker_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
         elif self._provider == "omniroute":
             if has_omniroute:
                 endpoints_to_try.append(("OmniRoute", self._omniroute_base_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
-            elif has_groq:
-                endpoints_to_try.append(("Direct Groq", self._groq_base_url, self._groq_api_key, self._groq_model, self._groq_timeout))
-        else:
-            # "auto" mode: prefer Direct Groq if key configured, or try OmniRoute -> Direct Groq
+                if "localhost" in self._omniroute_base_url:
+                    docker_url = self._omniroute_base_url.replace("localhost", "host.docker.internal")
+                    endpoints_to_try.append(("OmniRoute (Docker host)", docker_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
             if has_groq:
-                endpoints_to_try.append(("Direct Groq", self._groq_base_url, self._groq_api_key, self._groq_model, self._groq_timeout))
+                for gm in groq_models:
+                    endpoints_to_try.append((f"Direct Groq ({gm})", self._groq_base_url, self._groq_api_key, gm, self._groq_timeout))
+        else:
+            # "auto" mode: OmniRoute -> Direct Groq (with verified model fallbacks)
             if has_omniroute:
                 endpoints_to_try.append(("OmniRoute", self._omniroute_base_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
+                if "localhost" in self._omniroute_base_url:
+                    docker_url = self._omniroute_base_url.replace("localhost", "host.docker.internal")
+                    endpoints_to_try.append(("OmniRoute (Docker host)", docker_url, self._omniroute_api_key, self._omniroute_model, self._omniroute_timeout))
+            if has_groq:
+                for gm in groq_models:
+                    endpoints_to_try.append((f"Direct Groq ({gm})", self._groq_base_url, self._groq_api_key, gm, self._groq_timeout))
 
         if not endpoints_to_try:
             logger.warning("LLMClient: No valid API keys configured (neither Groq nor OmniRoute).")
@@ -193,7 +219,7 @@ class OmniRouteLLMClient(BaseLLMClient):
                     max_tokens=max_tokens,
                 )
             except Exception as e:
-                logger.warning("LLMClient: %s attempt failed (%s). Checking next fallback...", name, e)
+                logger.warning("LLMClient: %s attempt for model '%s' failed (%s). Checking next fallback...", name, model, e)
                 last_err = e
 
         if last_err:

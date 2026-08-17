@@ -29,6 +29,25 @@ function App() {
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
+  // Light / Dark Theme State & Persistence
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      return 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Show the plan card automatically when a new study plan arrives
   useEffect(() => {
     if (studyPlan) setShowPlan(true);
@@ -93,6 +112,18 @@ function App() {
         </div>
 
         <div className="header-actions">
+          {/* Theme Selector Toggle */}
+          <button
+            className="theme-toggle-btn"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} theme`}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} theme`}
+            data-testid="theme-toggle-btn"
+          >
+            <span className="btn-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <span className="btn-label">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+
           <button
             className="header-btn"
             onClick={() => {
@@ -117,9 +148,15 @@ function App() {
             <span className="btn-label">New Chat</span>
           </button>
 
-          <div className="header-status" aria-label="Service status: online">
+          <div
+            className={`header-status status-${error ? 'offline' : isLoading ? 'connecting' : 'online'}`}
+            aria-label={`Service status: ${error ? 'offline' : isLoading ? 'connecting' : 'online'}`}
+            data-testid="connection-status"
+          >
             <span className="status-dot" />
-            Online
+            <span className="status-label">
+              {error ? 'Offline' : isLoading ? 'Thinking…' : 'Online'}
+            </span>
           </div>
         </div>
       </header>
@@ -254,7 +291,7 @@ function App() {
       {/* ── Error Banner ────────────────────────────────────────── */}
       {error && (
         <div className="error-banner" role="alert" data-testid="error-banner">
-          <span>⚠️ {error}</span>
+          <span>⚠️ {error.includes('Traceback') || error.includes('500') || error.includes('Error') ? 'Something went wrong while connecting to EduGuardian. Please try again. 🔄' : error}</span>
           <div className="error-actions">
             <button className="error-retry-btn" onClick={retry}>Retry</button>
             <button onClick={clearError} aria-label="Dismiss error">✕</button>

@@ -5,6 +5,7 @@
   align-items: flex-end;
   gap: var(--space-sm);
   animation: bubble-in 0.25s ease;
+  margin-top: var(--space-xs);
 }
 
 .typing-avatar {
@@ -18,25 +19,45 @@
   color: white;
   flex-shrink: 0;
   box-shadow: var(--shadow-sm);
+  animation: pulse-glow 2.5s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(99, 102, 241, 0); }
+  50%      { box-shadow: 0 0 14px var(--color-primary-glow); }
 }
 
 .typing-bubble {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-sm);
+  padding: 10px 18px;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   border-bottom-left-radius: var(--space-xs);
+  box-shadow: var(--shadow-sm);
+}
+
+.typing-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .typing-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--color-primary);
-  animation: typing-bounce 1.2s ease-in-out infinite;
+  animation: typing-bounce 1.3s ease-in-out infinite;
 }
 
 .typing-dot:nth-child(1) { animation-delay: 0s; }
@@ -44,6 +65,7 @@
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typing-bounce {
-  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
-  40%           { transform: scale(1.0); opacity: 1.0; }
+  0%, 80%, 100% { transform: translateY(0) scale(0.75); opacity: 0.4; }
+  40%           { transform: translateY(-4px) scale(1.1); opacity: 1; }
 }
+

@@ -48,23 +48,18 @@ def try_resolve_deterministic_answer(
         )
         return True, system_agents_text, RequestIntent.SYSTEM_ARCHITECTURE
 
-    # 2. Existential / User-Referential Questions ("Why am I here?", "Why i am here?")
-    if is_existential_user_query(message):
-        existential_text = "That's a deeper question. If you mean your academic goals or purpose as a student, we can explore that together."
-        return True, existential_text, RequestIntent.CLARIFICATION
-
-    # 3. User Clarification ("No I am asking why I am here not you")
-    if is_clarification_user_query(message):
-        clarification_text = "Understood! As a student, you're here to build your skills, work toward your degree, and achieve your academic goals. We can focus on whichever area you'd like to explore."
-        return True, clarification_text, RequestIntent.CLARIFICATION
-
     # 4. Compound Question: Operating System + Tell me my name
     if "operating system" in msg_clean and "name" in msg_clean:
         os_def = "An operating system is system software that manages computer hardware, software resources, and provides common services for computer programs."
-        name_to_use = resolved_name or "Ajmal"
-        if constraints.one_word:
-            return True, f"{name_to_use}.", RequestIntent.IDENTITY
-        return True, f"Your name is {name_to_use}. {os_def}", RequestIntent.EDUCATIONAL
+        if resolved_name:
+            name_phrase = f"Your name is {resolved_name}."
+            if constraints.one_word:
+                return True, f"{resolved_name}.", RequestIntent.IDENTITY
+        else:
+            name_phrase = "I don't have your name saved yet."
+            if constraints.one_word:
+                return True, "Unknown.", RequestIntent.IDENTITY
+        return True, f"{name_phrase} {os_def}", RequestIntent.EDUCATIONAL
 
     # 5. Combined Name + Interest / Study Topic Query (e.g. "Tell me my name and what I like to study in one sentence.")
     if "name" in msg_clean and any(k in msg_clean for k in ["study", "favorite", "like", "interest"]):
@@ -137,6 +132,7 @@ def try_resolve_deterministic_answer(
         if student_context and student_context.attendance and student_context.attendance.overall_percentage is not None:
             pct = student_context.attendance.overall_percentage
             return True, f"Your current attendance is {pct:.0f}%.", RequestIntent.ACADEMIC_INSIGHT
+        return True, "I don't have your attendance records available right now.", RequestIntent.ACADEMIC_INSIGHT
 
     # 13. Simple Greeting (with or without name intro)
     is_greeting_only = bool(re.match(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening|day))(?:\s*,\s*|\s+)?(?:(?:my\s+name\s+is|i\s+am|i'm)\s+\w+)?$", msg_clean)) or bool(re.match(r"^(?:my\s+name\s+is\s+\w+|i\s+am\s+[a-zA-Z]+)$", msg_clean))

@@ -42,12 +42,12 @@ class Settings(BaseSettings):
     llm_provider: str = "auto"  # "auto" | "groq" | "omniroute"
     omniroute_base_url: str = "http://localhost:20128/v1"
     omniroute_api_key: str = "not-configured"
-    omniroute_model: str = "groq/llama-3.3-70b-versatile"
-    omniroute_timeout_seconds: float = 3.0
+    omniroute_model: str = "openai/gpt-oss-120b"
+    omniroute_timeout_seconds: float = 15.0
 
     groq_api_key: str | None = None
     groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_timeout_seconds: float = 10.0
 
     # ── A2A Protocol Endpoints (Independent Agent Services) ───

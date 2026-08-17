@@ -54,6 +54,14 @@ class ChatRequest(BaseModel):
         default=None,
         description="Optional UUID of ongoing conversation. If omitted, a new conversation is started.",
     )
+    user_id: str | None = Field(
+        default=None,
+        description="Optional explicit student identity override for testing/multi-tenant scenarios.",
+    )
+    student_id: str | None = Field(
+        default=None,
+        description="Optional alias for user_id.",
+    )
 
 
 class MessageSchema(BaseModel):
@@ -69,6 +77,8 @@ class ChatResponse(BaseModel):
     conversation_id: uuid.UUID
     message: MessageSchema
     study_plan: StudyPlan | None = None
+    teaching_state: dict[str, Any] | None = None
+    quiz_state: dict[str, Any] | None = None
     agents_used: list[str] = Field(default_factory=list)
 
 
