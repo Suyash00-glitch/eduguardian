@@ -1,0 +1,395 @@
+create table users (
+    id serial primary key,
+    full_name varchar(100) not null,
+    email varchar(150) unique not null,
+    password_hash text not null,
+    role varchar(20) not null
+        check (role in ('student', 'teacher', 'admin')),
+    is_active boolean default true,
+    created_at timestamp default current_timestamp
+);
+
+
+create table students (
+    id serial primary key,
+    user_id int unique not null
+        references users(id) on delete cascade,
+    usn varchar(20) unique not null,
+    department varchar(100),
+    semester int,
+    section varchar(20),
+    enrollment_year int,
+    created_at timestamp default current_timestamp
+);
+
+
+create table teachers (
+    id serial primary key,
+    user_id int unique not null
+        references users(id) on delete cascade,
+    employee_id varchar(30) unique,
+    department varchar(100),
+    created_at timestamp default current_timestamp
+);
+
+create table portal_accounts (
+    id serial primary key,
+    student_id int unique not null
+        references students(id) on delete cascade,
+    registration_number varchar(50) unique not null,
+    portal_name varchar(100) default 'university_solutions',
+    is_active boolean default true,
+    last_login_at timestamp,
+    created_at timestamp default current_timestamp
+);
+
+create table attendance_records (
+    id serial primary key,
+    student_id int not null
+        references students(id) on delete cascade,
+    subject_code varchar(50),
+    subject_name varchar(150),
+    classes_held int,
+    classes_attended int,
+    attendance_percentage decimal(5,2),
+    recorded_at timestamp default current_timestamp,
+    source varchar(50) default 'college_portal'
+);
+
+create table assignment_submissions (
+    id serial primary key,
+    student_id int not null
+        references students(id) on delete cascade,
+    subject_code varchar(50),
+    assignment_name varchar(150),
+    submission_status varchar(20)
+        check (submission_status in ('submitted', 'missed', 'late')),
+    submission_date date,
+    due_date date,
+    marks_obtained decimal(6,2),
+    max_marks decimal(6,2),
+    created_at timestamp default current_timestamp
+);
+
+create table quiz_results (
+    id serial primary key,
+    student_id int not null
+        references students(id) on delete cascade,
+    subject_code varchar(50),
+    quiz_name varchar(150),
+    marks_obtained decimal(6,2),
+    max_marks decimal(6,2),
+    quiz_date date,
+    created_at timestamp default current_timestamp
+);
+
+create table lms_activity (
+    id serial primary key,
+    student_id int not null
+        references students(id) on delete cascade,
+    activity_type varchar(50),
+    activity_count int default 0,
+    duration_minutes int default 0,
+    activity_date date,
+    created_at timestamp default current_timestamp
+);
+
+create table risk_predictions (
+    id serial primary key,
+    student_id int not null
+        references students(id) on delete cascade,
+
+    risk_level varchar(20) not null
+        check (risk_level in ('low', 'medium', 'high')),
+
+    recovery_probability decimal(5,2),
+    support_signal text,
+
+    attendance_change decimal(6,2),
+    lms_activity_change decimal(6,2),
+    missed_assignments int default 0,
+
+    shap_explanation jsonb,
+
+    model_name varchar(50),
+    model_version varchar(30),
+
+    created_at timestamp default current_timestamp
+);
+
+create table mentor_assignments (
+    id serial primary key,
+
+    student_id int not null
+        references students(id) on delete cascade,
+
+    mentor_id int not null
+        references teachers(id) on delete cascade,
+
+    assigned_by int not null
+        references users(id),
+
+    assigned_at timestamp default current_timestamp,
+
+    status varchar(20) default 'active'
+        check (status in ('active', 'completed', 'cancelled'))
+);
+
+create table interventions (
+    id serial primary key,
+
+    student_id int not null
+        references students(id) on delete cascade,
+
+    mentor_id int
+        references teachers(id) on delete set null,
+
+    created_by int not null
+        references users(id),
+
+    intervention_type varchar(50) not null,
+
+    description text,
+
+    status varchar(20) default 'planned'
+        check (status in ('planned', 'ongoing', 'completed', 'cancelled')),
+
+    outcome text,
+
+    created_at timestamp default current_timestamp,
+    completed_at timestamp
+);
+
+
+create table data_sync_logs (
+    id serial primary key,
+
+    source varchar(100) not null,
+    data_type varchar(50) not null,
+
+    status varchar(20) not null
+        check (status in ('success', 'failed', 'partial')),
+
+    records_processed int default 0,
+
+    error_message text,
+
+    started_at timestamp default current_timestamp,
+    completed_at timestamp
+);
+
+
+CREATE TABLE student_resources (
+    id SERIAL PRIMARY KEY,
+
+    student_id INT NOT NULL
+        REFERENCES students(id)
+        ON DELETE CASCADE,
+
+    teacher_id INT NOT NULL
+        REFERENCES teachers(id)
+        ON DELETE CASCADE,
+
+    title VARCHAR(255) NOT NULL,
+
+    resource_url TEXT NOT NULL,
+
+    resource_type VARCHAR(50) DEFAULT 'study_material',
+
+    target_category VARCHAR(50),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    is_read BOOLEAN DEFAULT FALSE
+);
+
+
+select * from users;
+select * from teachers;
+select * from assignments;
+
+
+create table teacher_assignments (
+    id serial primary key,
+
+    teacher_id int not null
+        references teachers(id) on delete cascade,
+
+    department varchar(100) not null,
+    semester int not null,
+    section varchar(20) not null,
+
+    subject_code varchar(50),        -- which subject, NULL if she's class admin
+    is_class_admin boolean default false,
+
+    created_at timestamp default current_timestamp,
+
+    unique (teacher_id, department, semester, section, subject_code)
+);
+
+
+
+create table assignments (
+    id serial primary key,
+    department varchar(100) not null,
+    semester int not null,
+    section varchar(20) not null,
+    subject_code varchar(50) not null,
+    created_by int not null references teachers(id),
+    assignment_name varchar(150) not null,
+    max_marks decimal(6,2),
+    due_date date,
+    created_at timestamp default current_timestamp
+);
+
+
+alter table assignment_submissions add column assignment_id int references assignments(id) on delete cascade;
+-- you can then drop the now-duplicate columns from assignment_submissions:
+alter table assignment_submissions drop column subject_code;
+alter table assignment_submissions drop column assignment_name;
+alter table assignment_submissions drop column due_date;
+alter table assignment_submissions drop column max_marks;
+
+
+
+
+create table subjects (
+    id serial primary key,
+    subject_code varchar(50) unique not null,
+    subject_name varchar(150) not null,
+    course_type varchar(20) not null
+        check (course_type in ('IPCC', 'PCC', 'HSMC', 'AEC', 'PEC')),
+    created_at timestamp default current_timestamp
+);
+
+
+
+insert into subjects (subject_code, subject_name, course_type) values
+    ('IS3001-1', 'DCN: Data Communication and Networking', 'IPCC'),
+    ('IS2002-1', 'ML: Machine Learning Foundations', 'IPCC'),
+    ('IS3101-1', 'OS: Operating Systems Fundamentals', 'PCC'),
+    ('HU1011-1', 'UHV: Universal Human Values', 'HSMC'),
+    ('IS1604-1', 'MD: MERNSTACK Development', 'PCC'),
+    ('UM1003-1', 'Employability Skill Development', 'AEC'),
+    ('HU1007-1', 'SCR - Social Connect & Responsibility', 'AEC'),
+    ('HU1010-1', 'RM: Research Methodology', 'AEC');
+
+select * from teassignments;
+
+
+
+ALTER TABLE assignments
+ADD COLUMN resource_name VARCHAR(255),
+ADD COLUMN resource_url TEXT;
+
+
+
+ALTER TABLE assignment_submissions
+ADD COLUMN file_name VARCHAR(255),
+ADD COLUMN file_url TEXT,
+ADD COLUMN file_type VARCHAR(100);
+
+
+
+
+
+INSERT INTO attendance_records (
+    student_id,
+    subject_code,
+    subject_name,
+    classes_held,
+    classes_attended,
+    attendance_percentage,
+    source
+)
+SELECT
+    s.id AS student_id,
+
+    sub.subject_code,
+
+    sub.subject_name,
+
+    h.classes_held AS NCC,
+
+    a.classes_attended AS NAC,
+
+    ROUND(
+        (a.classes_attended::numeric / h.classes_held::numeric) * 100,
+        2
+    ) AS attendance_percentage,
+
+    'fake_data' AS source
+
+FROM students s
+
+CROSS JOIN (
+    VALUES
+        ('IS3001-1', 'DCN: Data Communication and Networking'),
+        ('IS2002-1', 'ML: Machine Learning Foundations'),
+        ('IS3101-1', 'OS: Operating Systems Fundamentals'),
+        ('HU1011-1', 'UHV: Universal Human Values'),
+        ('IS1604-1', 'MD: MERNSTACK Development')
+) AS sub(subject_code, subject_name)
+
+CROSS JOIN LATERAL (
+    SELECT
+        (25 + floor(random() * 16))::int AS classes_held
+) h
+
+CROSS JOIN LATERAL (
+    SELECT
+        GREATEST(
+            0,
+            LEAST(
+                h.classes_held,
+                floor(
+                    h.classes_held *
+                    (0.65 + random() * 0.31)
+                )
+            )
+        )::int AS classes_attended
+) a
+
+WHERE s.semester = 5;
+
+
+
+select * from attendance_records;
+
+
+
+
+
+
+UPDATE attendance_records
+SET
+    classes_held = CASE subject_code
+        WHEN 'HU1011-1' THEN 35
+        WHEN 'IS1604-1' THEN 40
+        WHEN 'IS2002-1' THEN 38
+        WHEN 'IS3001-1' THEN 42
+        WHEN 'IS3101-1' THEN 36
+    END,
+
+    classes_attended = CASE subject_code
+        WHEN 'HU1011-1' THEN 28
+        WHEN 'IS1604-1' THEN 33
+        WHEN 'IS2002-1' THEN 29
+        WHEN 'IS3001-1' THEN 36
+        WHEN 'IS3101-1' THEN 25
+    END,
+
+    attendance_percentage = CASE subject_code
+        WHEN 'HU1011-1' THEN ROUND((28.0 / 35) * 100, 2)
+        WHEN 'IS1604-1' THEN ROUND((33.0 / 40) * 100, 2)
+        WHEN 'IS2002-1' THEN ROUND((29.0 / 38) * 100, 2)
+        WHEN 'IS3001-1' THEN ROUND((36.0 / 42) * 100, 2)
+        WHEN 'IS3101-1' THEN ROUND((25.0 / 36) * 100, 2)
+    END
+WHERE subject_code IN (
+    'HU1011-1',
+    'IS1604-1',
+    'IS2002-1',
+    'IS3001-1',
+    'IS3101-1'
+);

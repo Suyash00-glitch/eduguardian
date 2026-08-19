@@ -1,0 +1,292 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #06d6a0;
+  --primary-soft: rgba(6, 214, 160, 0.12);
+
+  --bg: #0b0f0e;
+  --surface: #121917;
+  --border: rgba(255, 255, 255, 0.08);
+
+  --text: #f5f7f6;
+  --text-secondary: #b8c2bf;
+  --text-muted: #7c8884;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+
+/* =========================================================
+   APP LOADING
+========================================================= */
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  height: 100vh;
+
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =========================================================
+   LAYOUT SHELL
+========================================================= */
+
+.student-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.page-content {
+  flex: 1;
+  padding: 24px 28px;
+}
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 18px 14px;
+
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 6px 8px 20px;
+  margin-bottom: 12px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 8px;
+
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.brand-name {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.brand-version {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.sidebar-navigation {
+  flex: 1;
+}
+
+.navigation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navigation-label {
+  display: block;
+  padding: 0 10px;
+  margin-bottom: 8px;
+
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  height: 36px;
+  padding: 0 10px;
+
+  border-radius: 8px;
+
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.sidebar-item.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.sidebar-bottom {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.logout-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  height: 36px;
+  padding: 0 10px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  font-size: 9px;
+  font-weight: 500;
+
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: rgba(232, 92, 71, 0.1);
+  color: #e85c47;
+}
+
+/* =========================================================
+   TOPBAR
+========================================================= */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  height: 68px;
+  padding: 0 28px;
+
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.topbar-page h1 {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.topbar-page span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 4px 10px 4px 4px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: transparent;
+  cursor: pointer;
+}
+
+.topbar-avatar {
+  width: 28px;
+  height: 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 7px;
+
+  background: var(--primary-soft);
+  color: var(--primary);
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.topbar-user {
+  text-align: left;
+}
+
+.topbar-user strong {
+  display: block;
+  color: var(--text);
+  font-size: 8px;
+}
+
+.topbar-user span {
+  color: var(--text-muted);
+  font-size: 7px;
+}
