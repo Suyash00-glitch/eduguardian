@@ -69,11 +69,21 @@ export interface ConversationSummary {
   updated_at?: string | null;
 }
 
+export interface AgentStatusEvent {
+  type: 'agent_status';
+  agent: string;
+  display_name: string;
+  status: 'working' | 'complete';
+  message?: string;
+  icon?: string;
+}
+
 export interface ChatState {
   conversationId: string | null;
   messages: Message[];
   studyPlan: StudyPlan | null;
   isLoading: boolean;
+  activeAgentStatus?: AgentStatusEvent | null;
   error: string | null;
   conversations: ConversationSummary[];
 }
@@ -81,4 +91,5 @@ export interface ChatState {
 export interface SendMessagePayload {
   message: string;
   conversation_id?: string;
+  user_id?: string;
 }

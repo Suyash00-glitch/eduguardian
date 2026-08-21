@@ -153,7 +153,7 @@ def format_student_context_section(
 
     display_name = resolved_name or (context.student_name or context.full_name or "Student")
     lines = [
-        "── STUDENT ACADEMIC CONTEXT (Internal — do NOT dump raw numbers to student) ──",
+        "── STUDENT ACADEMIC CONTEXT (Ground Truth from University Portal) ──",
         f"Name: {display_name}",
     ]
 
@@ -191,6 +191,29 @@ def format_student_context_section(
         rate = (submitted / total) * 100
         pending = context.assignments.pending_count or 0
         lines.append(f"Assignments: {submitted}/{total} submitted ({rate:.0f}% completion, {pending} pending)")
+
+    if context.historical_academic_performance:
+        hp = context.historical_academic_performance
+        cgpa = hp.get("cgpa")
+        latest_sgpa = hp.get("latest_sgpa")
+        trend = hp.get("sgpa_trend")
+        sems = hp.get("total_semesters_completed")
+        credits_earned = hp.get("total_credits_earned")
+        arrears = hp.get("arrears_count") or 0
+
+        lines.append("Authoritative Historical Academic Performance (Student Portal Ground Truth):")
+        if cgpa is not None:
+            lines.append(f"  • Cumulative GPA (CGPA): {cgpa}")
+        if latest_sgpa is not None:
+            sem_note = f" (from Semester {sems})" if sems else ""
+            lines.append(f"  • Latest Semester SGPA: {latest_sgpa}{sem_note}")
+        if trend:
+            lines.append(f"  • Academic Trajectory: {trend}")
+        if sems:
+            lines.append(f"  • Completed Semesters: {sems}")
+        if credits_earned is not None:
+            lines.append(f"  • Total Credits Earned: {credits_earned}")
+        lines.append(f"  • Active Backlogs / Arrears: {arrears}")
 
     return "\n".join(lines)
 
@@ -385,7 +408,7 @@ def _detect_progress_request(message: str) -> bool:
     msg_clean = message.lower().strip().rstrip("?.!")
     if "study plan" in msg_clean or "plan" in msg_clean or "schedule" in msg_clean:
         return False
-    return bool(re.search(r"\b(am\s+i\s+doing\s+well|how\s+am\s+i\s+doing|how\s+is\s+my\s+progress|my\s+performance|my\s+standing|how\s+am\s+i\s+doing\s+academically)\b", msg_clean))
+    return bool(re.search(r"\b(am\s+i\s+doing\s+well|how\s+am\s+i\s+doing|how\s+is\s+my\s+progress|my\s+performance|my\s+standing|how\s+am\s+i\s+performing|how\s+am\s+i\s+doing\s+academically|show\s+me\s+my\s+marks)\b", msg_clean))
 
 
 
@@ -396,11 +419,14 @@ def _detect_academic_improvement_request(message: str) -> bool:
 
 
 def _detect_explicit_data_request(message: str) -> bool:
-    """Returns True if asking for a specific numerical academic record."""
+    """Returns True if asking for a specific numerical academic record (CGPA, SGPA, attendance, marks)."""
     msg_lower = message.lower()
     keywords = [
         "what is my attendance", "what's my attendance", "my attendance percentage",
         "what is my score", "what's my score", "what are my marks", "my grades",
+        "what is my cgpa", "what's my cgpa", "my cgpa", "tell me my cgpa",
+        "what is my sgpa", "what's my sgpa", "my sgpa", "my latest sgpa", "latest sgpa",
+        "my credits", "how many credits", "my backlogs", "do i have backlogs",
     ]
     return any(kw in msg_lower for kw in keywords)
 
@@ -592,20 +618,8 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     is_greeting = bool(re.search(r"^(?:hi|hii+|hello|helo|hlo|hey|heyy+|yo|hola|howdy|sup|what'?s\s+up|good\s+(?:morning|afternoon|evening))\b", msg_l)) and not (msg.endswith("?") or is_hometown_q or is_name_q or is_ai_origin_q or is_math)
 
     # 3. Determine whether academic context should be injected
-    needs_academic_context = (
-        is_focus or is_progress or is_improvement or is_explicit_data or is_emotional
-        or bool(request.study_plan)
-        or "study plan" in msg_l
-        or "my performance" in msg_l
-        or "how am i doing" in msg_l
-        or "what should i work on" in msg_l
-        or "what should i study" in msg_l
-        or "what do i need to work on" in msg_l
-        or "my grades" in msg_l
-        or "my marks" in msg_l
-        or "my subjects" in msg_l
-        or "based on my performance" in msg_l
-    )
+    # Provide student context whenever available so the coach knows real subjects, courses, and student name
+    needs_academic_context = bool(request.student_context)
 
     sections = [
         format_student_context_section(
@@ -847,12 +861,16 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             "Respond now:"
         )
 
-    # 11. Explicit Academic Data (attendance, marks)
+    # 11. Explicit Academic Data (CGPA, SGPA, attendance, marks, credits)
     elif is_explicit_data:
         sections.append(
-            "\n[CRITICAL INSTRUCTION — DIRECT FACTUAL DATA]\n"
-            "• State the requested number directly in 1 short sentence (e.g. 'Your current attendance is 67%.').\n"
-            "• Do NOT add unsolicited study plans or long reviews.\n"
+            "\n[CRITICAL INSTRUCTION — DIRECT FACTUAL ACADEMIC DATA (CGPA / SGPA / ATTENDANCE)]\n"
+            "• If the student asks 'What is my CGPA?' or asks about their CGPA:\n"
+            "  - State their current CGPA directly from the ground-truth context (e.g. 'Your current CGPA is 8.45. Your latest SGPA is 8.67 from Semester 4, and your academic trajectory is improving.').\n"
+            "  - NEVER say you cannot calculate it or ask the student for credit weights when it is present in the context!\n"
+            "• If the student asks for their latest SGPA: state the exact SGPA and semester directly from the ground-truth context.\n"
+            "• If the student asks for attendance or marks: state the exact numbers directly in 1–2 clear, encouraging sentences.\n"
+            "• Stop after answering the direct question without unsolicited study plans.\n"
             "Respond as EduGuardian:"
         )
 

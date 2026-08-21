@@ -1,0 +1,212 @@
+# ============================================================
+# EduGuardian - FULL STACK Docker Compose
+# ============================================================
+# ONE COMMAND to run everything:
+#   docker compose -f docker-compose.full.yml up --build
+#
+# Services:
+#   db              - PostgreSQL 15                   (internal :5432)
+#   edu-backend     - Main REST API (FastAPI)         :5000
+#   gateway         - AI Chatbot Gateway              :8000
+#   agent-insight   - Student Insight AI Agent        :8001
+#   agent-planner   - Study Planner AI Agent          :8002
+#   agent-coach     - Recovery Coach AI Agent         :8003
+#   student-ui      - Student Dashboard (React)       :3001
+#   admin-ui        - Teacher/Admin Portal (React)    :3002
+#   chatbot-ui      - AI Chat Frontend (React)        :3000
+#
+# After starting:
+#   Student Portal   -> http://localhost:3001
+#   Admin Portal     -> http://localhost:3002
+#   AI Chat          -> http://localhost:3000
+#   edu-backend API  -> http://localhost:5000
+#   Chatbot API docs -> http://localhost:8000/docs
+# ============================================================
+
+services:
+
+  # -- Shared PostgreSQL Database --------------------------------
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eduguardian_dev_password}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -- edu-backend: Main REST API (:5000) -----------------------
+  edu-backend:
+    build:
+      context: ./edu-backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      database_url: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-eduguardian_dev_password}@db:5432/eduguardian
+      secret_key: ${SECRET_KEY:-eduguardian-dev-secret-key-2026}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # -- AI Chatbot: Student Insight Agent (:8001) ----------------
+  agent-insight:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-eduguardian_dev_password}@db:5432/eduguardian_chatbot
+      A2A_AGENT_URL: http://agent-insight:8001
+      OMNIROUTE_BASE_URL: http://host.docker.internal:20128/v1
+      LLM_PROVIDER: auto
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      uvicorn chatbot.backend.services.insight_service:app
+      --host 0.0.0.0
+      --port 8001
+
+  # -- AI Chatbot: Study Planner Agent (:8002) ------------------
+  agent-planner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-eduguardian_dev_password}@db:5432/eduguardian_chatbot
+      A2A_AGENT_URL: http://agent-planner:8002
+      OMNIROUTE_BASE_URL: http://host.docker.internal:20128/v1
+      LLM_PROVIDER: auto
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      uvicorn chatbot.backend.services.planner_service:app
+      --host 0.0.0.0
+      --port 8002
+
+  # -- AI Chatbot: Recovery Coach Agent (:8003) -----------------
+  agent-coach:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-eduguardian_dev_password}@db:5432/eduguardian_chatbot
+      A2A_AGENT_URL: http://agent-coach:8003
+      OMNIROUTE_BASE_URL: http://host.docker.internal:20128/v1
+      LLM_PROVIDER: auto
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      uvicorn chatbot.backend.services.coach_service:app
+      --host 0.0.0.0
+      --port 8003
+
+  # -- AI Chatbot: FastAPI Gateway (:8000) ----------------------
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-eduguardian_dev_password}@db:5432/eduguardian_chatbot
+      STUDENT_INSIGHT_AGENT_URL: http://agent-insight:8001
+      STUDY_PLANNER_AGENT_URL: http://agent-planner:8002
+      RECOVERY_COACH_AGENT_URL: http://agent-coach:8003
+      OMNIROUTE_BASE_URL: http://host.docker.internal:20128/v1
+      LLM_PROVIDER: auto
+      CORS_ORIGINS: "http://localhost:3000,http://localhost,http://chatbot-ui:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      agent-insight:
+        condition: service_started
+      agent-planner:
+        condition: service_started
+      agent-coach:
+        condition: service_started
+    command: >
+      uvicorn chatbot.backend.api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+
+  # -- Student Dashboard UI (:3001) -----------------------------
+  student-ui:
+    build:
+      context: ./prat-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:5000
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      - edu-backend
+
+  # -- Teacher / Admin Portal UI (:3002) ------------------------
+  admin-ui:
+    build:
+      context: ./ash-frontend/admin-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:5000
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    depends_on:
+      - edu-backend
+
+  # -- AI Chatbot Frontend UI (:3000) ---------------------------
+  chatbot-ui:
+    build:
+      context: ./chatbot/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

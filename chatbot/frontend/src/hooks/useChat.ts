@@ -73,6 +73,14 @@ export function useChat() {
       ...prev,
       messages: [...prev.messages, userMessage, initialAssistantMsg],
       isLoading: true,
+      activeAgentStatus: {
+        type: 'agent_status',
+        agent: 'academic_advisor',
+        display_name: 'Academic Advisor',
+        status: 'working',
+        message: 'Understanding your academic request...',
+        icon: '🎓',
+      },
       error: null,
     }));
 
@@ -83,6 +91,11 @@ export function useChat() {
           conversation_id: conversationIdRef.current ?? undefined,
         },
         {
+          onAgentStatus: (status) => {
+            if (status.status === 'working') {
+              setState(prev => ({ ...prev, activeAgentStatus: status }));
+            }
+          },
           onChunk: (chunk: string) => {
             setState(prev => {
               const updatedMessages = prev.messages.map(m => {
@@ -91,7 +104,7 @@ export function useChat() {
                 }
                 return m;
               });
-              return { ...prev, messages: updatedMessages };
+              return { ...prev, activeAgentStatus: null, messages: updatedMessages };
             });
           },
           onMeta: (meta) => {
@@ -122,11 +135,12 @@ export function useChat() {
               ...prev,
               messages: prev.messages.filter(m => m.id !== assistantMsgId || m.content.length > 0),
               isLoading: false,
+              activeAgentStatus: null,
               error: err.message || 'Stream connection interrupted.',
             }));
           },
           onDone: () => {
-            setState(prev => ({ ...prev, isLoading: false }));
+            setState(prev => ({ ...prev, isLoading: false, activeAgentStatus: null }));
             loadConversations();
           },
         },
@@ -145,6 +159,7 @@ export function useChat() {
           messages: prev.messages.filter(m => m.id !== assistantMsgId).concat(response.message),
           studyPlan: response.study_plan ?? prev.studyPlan,
           isLoading: false,
+          activeAgentStatus: null,
         }));
         loadConversations();
       } catch (fallbackErr) {
@@ -153,6 +168,7 @@ export function useChat() {
           ...prev,
           messages: prev.messages.filter(m => m.id !== assistantMsgId || m.content.length > 0),
           isLoading: false,
+          activeAgentStatus: null,
           error: message,
         }));
       }
@@ -264,6 +280,7 @@ export function useChat() {
     messages: state.messages,
     studyPlan: state.studyPlan,
     isLoading: state.isLoading,
+    activeAgentStatus: state.activeAgentStatus,
     error: state.error,
     conversationId: state.conversationId,
     conversations: state.conversations,

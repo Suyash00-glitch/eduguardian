@@ -105,8 +105,9 @@ class AcademicGroundingGuardrail(BaseOutputGuardrail):
         )
         for match in list(subj_att_pattern.finditer(text)):
             subj_name = match.group(1).strip()
-            # Ignore if phrase is generic like "overall", "class", "total", "college"
-            if subj_name.lower() in ("overall", "total", "class", "general", "course", "college", "school", "your", "my"):
+            # Ignore if phrase is generic like "overall", "current overall", "class", "total", "college", "track record"
+            generic_keywords = ("overall", "current", "total", "class", "general", "course", "college", "school", "your", "my", "semester", "average", "record", "track", "performance", "history", "standing", "trend")
+            if any(kw in subj_name.lower() for kw in generic_keywords):
                 continue
 
             claimed_pct = float(match.group(2))

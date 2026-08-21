@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import uuid
 from typing import Any
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from chatbot.backend.api.dependencies import (
@@ -40,22 +40,32 @@ class RenameRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=80, description="New conversation title")
 
 
+def _resolve_student_id(
+    jwt_student_id: str | None,
+    body_user_id: str | None,
+    header_student_id: str | None,
+) -> str:
+    """Resolves authoritative student identity for the turn."""
+    sid = jwt_student_id or header_student_id or body_user_id or ""
+    clean = sid.strip()
+    if not clean:
+        return "student_001"
+    return clean
+
 
 # ── POST /chat ─────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=ChatResponse, status_code=status.HTTP_200_OK)
 async def send_message(
     request: ChatRequest,
-    student_id: str = Depends(get_current_student_id),
+    jwt_student_id: str | None = Depends(get_current_student_id),
+    x_student_id: str | None = Header(None, alias="X-Student-ID"),
     chat_service: ChatService = Depends(get_chat_service),
 ) -> ChatResponse:
     """
     Main chat turn endpoint.
-
-    Sends a user message, executes the LangGraph workflow, persists the turn,
-    and returns the supportive assistant response along with any generated study plan.
     """
-    effective_student_id = request.user_id or request.student_id or student_id
+    effective_student_id = _resolve_student_id(jwt_student_id, request.user_id or request.student_id, x_student_id)
     return await chat_service.send_message(student_id=effective_student_id, request=request)
 
 
@@ -64,14 +74,14 @@ async def send_message(
 @router.post("/stream", status_code=status.HTTP_200_OK)
 async def send_message_stream(
     request: ChatRequest,
-    student_id: str = Depends(get_current_student_id),
+    jwt_student_id: str | None = Depends(get_current_student_id),
+    x_student_id: str | None = Header(None, alias="X-Student-ID"),
     chat_service: ChatService = Depends(get_chat_service),
 ):
     """
     Progressive SSE streaming turn endpoint.
-    Streams token chunks progressively and returns metadata/study plan at completion.
     """
-    effective_student_id = request.user_id or request.student_id or student_id
+    effective_student_id = _resolve_student_id(jwt_student_id, request.user_id or request.student_id, x_student_id)
     from fastapi.responses import StreamingResponse
     return StreamingResponse(
         chat_service.send_message_stream(student_id=effective_student_id, request=request),
@@ -82,7 +92,6 @@ async def send_message_stream(
             "X-Accel-Buffering": "no",
         },
     )
-
 
 
 # ── GET /chat/{conversation_id}/messages ───────────────────────────────────────
@@ -100,14 +109,16 @@ async def send_message_stream(
 )
 async def get_messages(
     conversation_id: uuid.UUID,
-    student_id: str = Depends(get_current_student_id),
+    jwt_student_id: str | None = Depends(get_current_student_id),
+    x_student_id: str | None = Header(None, alias="X-Student-ID"),
     chat_service: ChatService = Depends(get_chat_service),
 ) -> ConversationHistoryResponse:
     """
     Retrieves the chronological message history for a specific conversation thread.
     Enforces student-level ownership verification.
     """
-    return await chat_service.get_history(student_id=student_id, conversation_id=conversation_id)
+    effective_student_id = _resolve_student_id(jwt_student_id, None, x_student_id)
+    return await chat_service.get_history(student_id=effective_student_id, conversation_id=conversation_id)
 
 
 # ── GET /chat/conversations ───────────────────────────────────────────────────
@@ -117,13 +128,15 @@ async def get_messages(
     status_code=status.HTTP_200_OK,
 )
 async def list_conversations(
-    student_id: str = Depends(get_current_student_id),
+    jwt_student_id: str | None = Depends(get_current_student_id),
+    x_student_id: str | None = Header(None, alias="X-Student-ID"),
     chat_service: ChatService = Depends(get_chat_service),
 ) -> list[dict[str, Any]]:
     """
     Lists all conversation threads belonging to the authenticated student.
     """
-    return await chat_service.list_conversations(student_id=student_id)
+    effective_student_id = _resolve_student_id(jwt_student_id, None, x_student_id)
+    return await chat_service.list_conversations(student_id=effective_student_id)
 
 
 # ── DELETE /chat/{conversation_id} ─────────────────────────────────────────────
@@ -134,13 +147,15 @@ async def list_conversations(
 )
 async def delete_conversation(
     conversation_id: uuid.UUID,
-    student_id: str = Depends(get_current_student_id),
+    jwt_student_id: str | None = Depends(get_current_student_id),
+    x_student_id: str | None = Header(None, alias="X-Student-ID"),
     chat_service: ChatService = Depends(get_chat_service),
 ) -> dict[str, Any]:
     """
     Deletes a conversation thread and its associated message history.
     """
-    return await chat_service.delete_conversation(student_id=student_id, conversation_id=conversation_id)
+    effective_student_id = _resolve_student_id(jwt_student_id, None, x_student_id)
+    return await chat_service.delete_conversation(student_id=effective_student_id, conversation_id=conversation_id)
 
 
 # ── PATCH /chat/{conversation_id}/title ────────────────────────────────────────

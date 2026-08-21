@@ -258,6 +258,61 @@ def analyze_trends(trends: TrendInformation | None) -> dict[str, Any]:
     }
 
 
+def analyze_historical_academic_performance(perf: dict[str, Any] | None) -> dict[str, Any]:
+    """Analyzes authoritative historical portal academic performance (CGPA, SGPA, credits, backlogs)."""
+    if not perf or not isinstance(perf, dict):
+        return {"has_data": False}
+
+    cgpa = perf.get("cgpa")
+    latest_sgpa = perf.get("latest_sgpa")
+    sgpa_trend = str(perf.get("sgpa_trend") or "stable").lower()
+    total_sems = perf.get("total_semesters_completed") or 0
+    total_credits = perf.get("total_credits_earned")
+    arrears = perf.get("arrears_count") or 0
+
+    strengths = []
+    focus_areas = []
+    contributing_factors = []
+
+    if cgpa is not None:
+        cgpa_val = float(cgpa)
+        if cgpa_val >= 7.5:
+            strengths.append(f"Strong overall academic standing (CGPA: {cgpa_val:.2f})")
+        elif cgpa_val < 6.0:
+            focus_areas.append("CGPA improvement")
+            contributing_factors.append(f"Current CGPA is {cgpa_val:.2f}")
+
+    if latest_sgpa is not None:
+        sgpa_val = float(latest_sgpa)
+        if sgpa_val >= 7.5:
+            strengths.append(f"High latest semester performance (SGPA: {sgpa_val:.2f})")
+
+    if sgpa_trend == "improving":
+        strengths.append("Consistently improving semester SGPA trajectory")
+    elif sgpa_trend == "declining":
+        focus_areas.append("Semester SGPA stabilization")
+        contributing_factors.append("Latest SGPA trajectory has shown a decline")
+
+    if arrears == 0 and total_sems > 0:
+        strengths.append("Clear academic record with zero backlogs")
+    elif arrears > 0:
+        focus_areas.append(f"Clearing active backlogs ({arrears} backlog{'s' if arrears > 1 else ''})")
+        contributing_factors.append(f"{arrears} active backlog course(s) from prior semesters")
+
+    return {
+        "has_data": True,
+        "cgpa": cgpa,
+        "latest_sgpa": latest_sgpa,
+        "sgpa_trend": sgpa_trend,
+        "total_semesters_completed": total_sems,
+        "total_credits_earned": total_credits,
+        "arrears_count": arrears,
+        "strengths": strengths,
+        "focus_areas": focus_areas,
+        "contributing_factors": contributing_factors,
+    }
+
+
 def synthesize_academic_insight(
     context: StudentContext,
     query_context: str | None = None,
@@ -266,7 +321,8 @@ def synthesize_academic_insight(
     Main entry point for deterministic academic insight generation.
 
     Integrates findings across attendance, courses, assignments, quizzes,
-    engagement, and trends into a cohesive, evidence-based StudentInsight.
+    engagement, historical academic performance (CGPA/SGPA), and trends into
+    a cohesive, evidence-based StudentInsight.
     """
     student_id = context.student_id
 
@@ -277,10 +333,12 @@ def synthesize_academic_insight(
     ass_res = analyze_assessments(context.assessments)
     eng_res = analyze_engagement(context.engagement)
     trd_res = analyze_trends(context.trends)
+    hist_res = analyze_historical_academic_performance(context.historical_academic_performance)
 
     # 2. Aggregate findings
     all_strengths = (
-        att_res.get("strengths", [])
+        hist_res.get("strengths", [])
+        + att_res.get("strengths", [])
         + sub_res.get("strengths", [])
         + asg_res.get("strengths", [])
         + ass_res.get("strengths", [])
@@ -289,7 +347,8 @@ def synthesize_academic_insight(
     )
 
     all_focus_areas = (
-        att_res.get("focus_areas", [])
+        hist_res.get("focus_areas", [])
+        + att_res.get("focus_areas", [])
         + sub_res.get("focus_areas", [])
         + asg_res.get("focus_areas", [])
         + ass_res.get("focus_areas", [])
@@ -298,7 +357,8 @@ def synthesize_academic_insight(
     )
 
     all_contributing_factors = (
-        att_res.get("contributing_factors", [])
+        hist_res.get("contributing_factors", [])
+        + att_res.get("contributing_factors", [])
         + sub_res.get("contributing_factors", [])
         + asg_res.get("contributing_factors", [])
         + ass_res.get("contributing_factors", [])
@@ -314,8 +374,9 @@ def synthesize_academic_insight(
     has_declining_attendance = att_res.get("trend") == "declining" or (att_res.get("percentage", 100) < 70.0)
     has_multiple_focus_subjects = len(sub_res.get("focus_areas", [])) >= 2
     has_low_submissions = asg_res.get("submission_rate", 1.0) < 0.65
+    has_multiple_backlogs = (hist_res.get("arrears_count") or 0) >= 2
 
-    concerning_count = sum([has_declining_attendance, has_multiple_focus_subjects, has_low_submissions])
+    concerning_count = sum([has_declining_attendance, has_multiple_focus_subjects, has_low_submissions, has_multiple_backlogs])
     has_concerning_patterns = concerning_count >= 2
 
     if has_concerning_patterns:
@@ -326,12 +387,22 @@ def synthesize_academic_insight(
         support_intensity = "standard"
 
     # 4. Generate evidence-based summary & explanation
-    if not all_strengths and not all_focus_areas:
+    q_lower = (query_context or "").lower()
+    is_cgpa_query = "cgpa" in q_lower or "sgpa" in q_lower or "gpa" in q_lower
+
+    if is_cgpa_query and hist_res.get("has_data"):
+        cgpa_val = hist_res.get("cgpa")
+        sgpa_val = hist_res.get("latest_sgpa")
+        trend_val = hist_res.get("sgpa_trend", "stable")
+        sems_val = hist_res.get("total_semesters_completed", 0)
+        summary = f"Current CGPA is {cgpa_val} with latest SGPA of {sgpa_val} (Semester {sems_val}) and {trend_val} academic trajectory."
+        explanation = f"Academic standing is established from {sems_val} completed semesters of examination records."
+    elif not all_strengths and not all_focus_areas:
         summary = "Student academic profile is on track with steady baseline engagement."
         explanation = "Available records indicate consistent ongoing progress."
     elif all_strengths and not all_focus_areas:
         summary = f"Student demonstrates strong performance across {', '.join(all_strengths[:2])}."
-        explanation = "Consistent attendance and timely submissions are driving positive outcomes."
+        explanation = "Consistent attendance and academic trajectory are driving positive outcomes."
     elif all_focus_areas and not all_strengths:
         summary = f"Opportunities identified to reinforce {', '.join(all_focus_areas[:2])} through structured study."
         explanation = f"Focusing on {', '.join(all_contributing_factors[:2])} will provide the highest impact."
@@ -355,5 +426,7 @@ def synthesize_academic_insight(
             "has_attendance_data": att_res.get("has_data", False),
             "has_subjects_data": sub_res.get("has_data", False),
             "has_assignments_data": asg_res.get("has_data", False),
+            "has_historical_data": hist_res.get("has_data", False),
+            "historical_performance": context.historical_academic_performance or {},
         },
     )

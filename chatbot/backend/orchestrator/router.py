@@ -210,13 +210,16 @@ _PLAN_PATTERNS = re.compile(
 
 _ACADEMIC_PATTERNS = re.compile(
     r"\b("
-    r"grades?|marks?|gpa|attendance|classes attended|missed classes|"
-    r"how am i doing|my progress|my performance|my standing|academic situation|"
-    r"why am i struggling|struggling with|falling behind|catch up|"
-    r"why are my (marks|grades|scores) (dropping|slipping|low)|"
-    r"failing|exam results?|quiz scores?|assessment scores?|"
-    r"which subjects?|what topics? to focus on|where do i need to improve|"
-    r"what should i focus on next"
+    r"c?gpa|sgpa|grades?|marks?|marks\s+card|credits?|backlogs?|arrears?|attendance|classes\s+attended|missed\s+classes|"
+    r"what\s+is\s+my\s+(?:c?gpa|sgpa|latest\s+sgpa|grade|score|mark|attendance)|what'?s\s+my\s+(?:c?gpa|sgpa|latest\s+sgpa|grade|score|mark|attendance)|"
+    r"my\s+(?:c?gpa|sgpa|latest\s+sgpa|marks|grades|scores|attendance|progress|record|standing|performance)|"
+    r"how\s+am\s+i\s+doing|how\s+am\s+i\s+performing(?:\s+academically)?|how\s+is\s+my\s+(?:progress|attendance|performance)|my\s+academic\s+performance|"
+    r"show\s+me\s+my\s+marks(?:\s+performance)?|semester\s+results?|exam\s+results?|quiz\s+scores?|assessment\s+scores?|"
+    r"academic\s+trajectory|academic\s+situation|track\s+record|"
+    r"why\s+am\s+i\s+struggling|struggling\s+with|falling\s+behind|catch\s+up|"
+    r"why\s+are\s+my\s+(?:marks|grades|scores)\s+(?:dropping|slipping|low)|"
+    r"failing|which\s+subjects?|what\s+topics?\s+to\s+focus\s+on|where\s+do\s+i\s+need\s+to\s+improve|"
+    r"what\s+should\s+i\s+focus\s+on\s+next"
     r")\b",
     re.IGNORECASE,
 )

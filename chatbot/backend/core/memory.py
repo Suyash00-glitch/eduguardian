@@ -29,6 +29,7 @@ _EXCLUDED_NAME_TOKENS = {
     "living", "staying", "telling", "saying", "looking", "searching", "reading",
     "writing", "answering", "speaking", "talking", "getting", "making", "feeling",
     "user", "assistant", "bot", "coach", "today", "now", "just", "really",
+    "eduguardian", "eduguard", "ai", "model", "system", "teacher", "professor",
 }
 
 # Question indicators that invalidate fact extraction
@@ -322,10 +323,10 @@ def resolve_user_facts(
     Preserves existing facts; questions NEVER overwrite or delete established facts.
     """
     facts = UserFacts()
-    if known_name and str(known_name).lower() not in _EXCLUDED_NAME_TOKENS:
-        facts.name = str(known_name).capitalize()
-    if known_hometown and str(known_hometown).lower() not in _EXCLUDED_NAME_TOKENS:
-        facts.hometown = str(known_hometown)
+    if known_name and str(known_name).strip().lower() not in _EXCLUDED_NAME_TOKENS:
+        facts.name = " ".join(w.capitalize() for w in str(known_name).strip().split())
+    if known_hometown and str(known_hometown).strip().lower() not in _EXCLUDED_NAME_TOKENS:
+        facts.hometown = str(known_hometown).strip()
 
     # 1. Replay history messages in chronological order
     if history:
@@ -343,14 +344,20 @@ def resolve_user_facts(
             if "user" in role_str:
                 _update_facts_from_text(content, facts)
 
-    # 2. Direct fallback extraction from history if name still missing
+    # 2. Direct fallback extraction from user history only if name still missing
     if not facts.name and history:
         for msg in history:
-            c = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-            n = extract_name(str(c or ""))
-            if n:
-                facts.name = n
-                break
+            if isinstance(msg, dict):
+                raw_role = str(msg.get("role", "user")).lower()
+                c = msg.get("content", "")
+            else:
+                raw_role = str(getattr(msg, "role", "user")).lower()
+                c = getattr(msg, "content", "")
+            if "user" in raw_role:
+                n = extract_name(str(c or ""))
+                if n and n.lower() not in _EXCLUDED_NAME_TOKENS:
+                    facts.name = n
+                    break
 
     # 3. Update with current message
     _update_facts_from_text(current_message, facts)

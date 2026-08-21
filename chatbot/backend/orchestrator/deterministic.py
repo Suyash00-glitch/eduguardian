@@ -36,7 +36,12 @@ def try_resolve_deterministic_answer(
         (is_deterministic, answer_text, request_intent)
     """
     msg_clean = message.lower().strip().rstrip("?.!")
-    resolved_name = user_facts.name or ""
+    resolved_name = (
+        user_facts.name
+        or (student_context.student_name if student_context else "")
+        or (student_context.full_name if student_context else "")
+        or ""
+    ).strip()
 
     # 1. System Architecture / Available Agents Query
     if is_system_architecture_query(message):
@@ -127,14 +132,7 @@ def try_resolve_deterministic_answer(
     if msg_clean in ["what is operating system", "what is an operating system", "what is os", "define operating system"]:
         return True, "An operating system is system software that manages computer hardware, software resources, and provides common services for computer programs.", RequestIntent.EDUCATIONAL
 
-    # 12. Direct Numerical Profile Data
-    if any(kw in msg_clean for kw in ["what is my attendance", "what's my attendance", "my attendance percentage"]) and not any(kw in msg_clean for kw in ["improve", "how", "why", "plan"]):
-        if student_context and student_context.attendance and student_context.attendance.overall_percentage is not None:
-            pct = student_context.attendance.overall_percentage
-            return True, f"Your current attendance is {pct:.0f}%.", RequestIntent.ACADEMIC_INSIGHT
-        return True, "I don't have your attendance records available right now.", RequestIntent.ACADEMIC_INSIGHT
-
-    # 13. Simple Greeting (with or without name intro)
+    # 12. Simple Greeting (with or without name intro)
     is_greeting_only = bool(re.match(r"^(?:hi|hii+|hello|hey|good\s+(?:morning|afternoon|evening|day))(?:\s*,\s*|\s+)?(?:(?:my\s+name\s+is|i\s+am|i'm)\s+\w+)?$", msg_clean)) or bool(re.match(r"^(?:my\s+name\s+is\s+\w+|i\s+am\s+[a-zA-Z]+)$", msg_clean))
     if is_greeting_only and not message.endswith("?"):
         target_name = resolved_name

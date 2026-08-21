@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import type { Message, StudyPlan } from '../types';
+import type { Message, StudyPlan, AgentStatusEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import './ChatWindow.css';
@@ -7,6 +7,7 @@ import './ChatWindow.css';
 interface Props {
   messages: Message[];
   isLoading: boolean;
+  activeAgentStatus?: AgentStatusEvent | null;
   studyPlan: StudyPlan | null;
   onOpenStudyPlan: () => void;
   onSelectPrompt?: (prompt: string) => void;
@@ -23,6 +24,7 @@ const STARTER_PROMPTS = [
 export const ChatWindow: React.FC<Props> = ({
   messages,
   isLoading,
+  activeAgentStatus,
   studyPlan,
   onOpenStudyPlan,
   onSelectPrompt,
@@ -32,7 +34,7 @@ export const ChatWindow: React.FC<Props> = ({
   // Auto-scroll to latest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, activeAgentStatus]);
 
   const isEmpty = messages.length === 0 && !isLoading;
 
@@ -68,7 +70,7 @@ export const ChatWindow: React.FC<Props> = ({
               <MessageBubble key={msg.id} message={msg} />
             ))}
           {isLoading && (!messages.length || messages[messages.length - 1].role === 'user' || !messages[messages.length - 1].content || messages[messages.length - 1].content.trim().length === 0) && (
-            <TypingIndicator />
+            <TypingIndicator status={activeAgentStatus} />
           )}
         </div>
       )}

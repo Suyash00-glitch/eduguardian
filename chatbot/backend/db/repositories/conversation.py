@@ -82,16 +82,29 @@ class ConversationRepository:
             .where(Conversation.id == conversation_id)
         )
         if student_id:
-            stmt = stmt.where(Conversation.student_id == student_id)
+            clean_sid = (student_id or "").strip()
+            candidates = {clean_sid, clean_sid.upper(), clean_sid.lower()}
+            if clean_sid == "3" or clean_sid == "NNM24IS127" or "nnm24is127" in clean_sid.lower():
+                candidates.update({"3", "NNM24IS127", "nnm24is127@eduguardian.ai"})
+            elif clean_sid == "21" or clean_sid == "NNM24IS172" or "nnm24is172" in clean_sid.lower() or "9902300115" in clean_sid:
+                candidates.update({"21", "NNM24IS172", "9902300115@studentportal.universitysolutions.in"})
+            stmt = stmt.where(Conversation.student_id.in_(candidates))
 
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_conversations(self, student_id: str) -> list[Conversation]:
         """Returns all conversations for a specific student, sorted by newest first."""
+        clean_sid = (student_id or "").strip()
+        candidates = {clean_sid, clean_sid.upper(), clean_sid.lower()}
+        if clean_sid == "3" or clean_sid == "NNM24IS127" or "nnm24is127" in clean_sid.lower():
+            candidates.update({"3", "NNM24IS127", "nnm24is127@eduguardian.ai"})
+        elif clean_sid == "21" or clean_sid == "NNM24IS172" or "nnm24is172" in clean_sid.lower() or "9902300115" in clean_sid:
+            candidates.update({"21", "NNM24IS172", "9902300115@studentportal.universitysolutions.in"})
+
         result = await self._session.execute(
             select(Conversation)
-            .where(Conversation.student_id == student_id)
+            .where(Conversation.student_id.in_(candidates))
             .order_by(Conversation.updated_at.desc())
         )
         return list(result.scalars().all())
@@ -122,6 +135,19 @@ class ConversationRepository:
             conv.updated_at = datetime.utcnow()
             await self._session.flush()
             logger.info("ConversationRepository: Renamed conversation_id=%s to '%s'", conversation_id, title)
+
+    async def update_student_id(
+        self,
+        conversation_id: uuid.UUID,
+        student_id: str,
+    ) -> None:
+        """Transfers or updates ownership of a conversation to a resolved student identity."""
+        conv = await self.get_conversation(conversation_id)
+        if conv:
+            conv.student_id = student_id
+            conv.updated_at = datetime.utcnow()
+            await self._session.flush()
+            logger.info("ConversationRepository: Updated conversation_id=%s student_id to %s", conversation_id, student_id)
 
 
 

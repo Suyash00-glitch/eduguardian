@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     a2a_use_remote_services: bool = True  # Official a2a-sdk HTTP client to agent microservices
 
     # ── JWT Verification (Auth teammate issues tokens) ───────
-    jwt_secret_key: str = "replace-with-shared-jwt-secret"
+    jwt_secret_key: str = "eduguardian-super-secret-key-2024"
     jwt_algorithm: str = "HS256"
 
     # ── Student Context Caching ──────────────────────────────

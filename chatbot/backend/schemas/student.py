@@ -168,5 +168,15 @@ class StudentContext(BaseModel):
         description="Internal history of support actions.",
     )
 
+    # Authoritative Historical Academic Performance from Student Portal (CGPA, SGPA, credits, arrears, marks cards)
+    historical_academic_performance: dict[str, Any] | None = Field(
+        default=None,
+        description="Authoritative historical performance: cgpa, latest_sgpa, sgpa_trend, total_credits_earned, arrears_count, semesters",
+    )
+    academic_guidance: dict[str, Any] | None = Field(
+        default=None,
+        description="Constructive student-facing academic guidance",
+    )
+
     # Extensible metadata
     metadata: dict[str, Any] = Field(default_factory=dict)

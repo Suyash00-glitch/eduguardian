@@ -167,6 +167,23 @@ async def student_insight_node(state: GraphState) -> dict[str, Any]:
             "agents_used": state.get("agents_used", []) + ["student_insight"],
         }
 
+    # Strict Multi-Tenant Security Check: Fail Closed on Identity Mismatch
+    state_sid = str(state.get("student_id") or "").strip().lower()
+    ctx_sid = str(context.student_id or "").strip().lower()
+    if state_sid and ctx_sid and state_sid not in ("default", "me", "student", "user_001"):
+        # If both are explicit, ensure they match or represent the same student
+        if state_sid != ctx_sid and state_sid not in ctx_sid and ctx_sid not in state_sid:
+            logger.error(
+                "Student context identity mismatch: authenticated_sid=%s vs context_sid=%s. Failing closed.",
+                state_sid,
+                ctx_sid,
+            )
+            return {
+                **state,
+                "insight_response": None,
+                "agents_used": state.get("agents_used", []) + ["student_insight"],
+            }
+
     effective_msg = state.get("resolved_user_message") or state.get("user_message")
     request = InsightRequest(
         student_id=state.get("student_id", context.student_id),
@@ -439,4 +456,54 @@ async def run_graph(initial_state: GraphState) -> GraphState:
     logger.info("Executing LangGraph workflow for student_id=%s", initial_state.get("student_id"))
     final_state = await _compiled_graph.ainvoke(initial_state)
     return cast(GraphState, final_state)
+
+
+async def run_graph_with_events(initial_state: GraphState):
+    """
+    Executes the compiled LangGraph workflow while yielding real-time agent status events.
+    Yields:
+      ("status", status_event_dict)
+      ("final_state", accumulated_state)
+    """
+    from chatbot.backend.orchestrator.agent_status import create_agent_status_event
+
+    logger.info("Executing LangGraph workflow with real-time agent status events for student_id=%s", initial_state.get("student_id"))
+    accumulated_state: dict[str, Any] = dict(initial_state)
+
+    # Initial start event: Academic Advisor is preparing context & understanding request
+    yield ("status", create_agent_status_event("request_processor", status="working"))
+
+    async for chunk in _compiled_graph.astream(initial_state, stream_mode="updates"):
+        for node_name, node_update in chunk.items():
+            if isinstance(node_update, dict):
+                accumulated_state.update(node_update)
+
+            # Emit completion of previous node
+            yield ("status", create_agent_status_event(node_name, status="complete"))
+
+            # Inspect state to emit working event for next expected node
+            if node_name == "request_processor":
+                intent = accumulated_state.get("intent")
+                is_det = accumulated_state.get("processed_request", {}).get("is_deterministic", False)
+                if not is_det:
+                    if intent in ("academic_insight", "study_planning"):
+                        yield ("status", create_agent_status_event("student_insight", status="working"))
+                    else:
+                        yield ("status", create_agent_status_event("recovery_coach", status="working"))
+
+            elif node_name == "student_insight":
+                intent = accumulated_state.get("intent")
+                if intent == "study_planning":
+                    yield ("status", create_agent_status_event("study_planner", status="working"))
+                else:
+                    yield ("status", create_agent_status_event("recovery_coach", status="working"))
+
+            elif node_name == "study_planner":
+                yield ("status", create_agent_status_event("recovery_coach", status="working"))
+
+            elif node_name == "recovery_coach":
+                yield ("status", create_agent_status_event("response_validator", status="working"))
+
+    yield ("final_state", cast(GraphState, accumulated_state))
+
 

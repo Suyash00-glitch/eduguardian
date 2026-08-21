@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { ChatWindow } from './components/ChatWindow';
 import { InputBar } from './components/InputBar';
@@ -10,6 +10,7 @@ function App() {
     messages,
     studyPlan,
     isLoading,
+    activeAgentStatus,
     error,
     conversationId,
     conversations,
@@ -48,9 +49,13 @@ function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Show the plan card automatically when a new study plan arrives
+  // Show the plan card automatically only when a brand new study plan arrives
+  const lastPlanRef = useRef<any>(null);
   useEffect(() => {
-    if (studyPlan) setShowPlan(true);
+    if (studyPlan && studyPlan !== lastPlanRef.current) {
+      lastPlanRef.current = studyPlan;
+      setShowPlan(true);
+    }
   }, [studyPlan]);
 
   // Load conversations on mount
@@ -304,6 +309,7 @@ function App() {
         <ChatWindow
           messages={messages}
           isLoading={isLoading}
+          activeAgentStatus={activeAgentStatus}
           studyPlan={studyPlan}
           onOpenStudyPlan={() => setShowPlan(true)}
           onSelectPrompt={(prompt) => send(prompt)}

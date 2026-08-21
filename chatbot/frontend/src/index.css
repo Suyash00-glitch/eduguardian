@@ -11,59 +11,59 @@
   --theme: dark;
 
   /* Base & Surfaces */
-  --color-bg:            #0a0f1e;
-  --color-surface:       #111827;
-  --color-surface-2:     #1a2236;
-  --color-surface-3:     #243047;
-  --color-surface-4:     #374151;
+  --color-bg:            #061412;
+  --color-surface:       #0b211d;
+  --color-surface-2:     #102a25;
+  --color-surface-3:     #15352f;
+  --color-surface-4:     #1f453e;
 
   /* Borders & Dividers */
-  --color-border:        rgba(99, 143, 255, 0.12);
-  --color-border-hover:  rgba(99, 143, 255, 0.28);
+  --color-border:        rgba(220, 245, 240, 0.1);
+  --color-border-hover:  rgba(6, 214, 160, 0.3);
 
   /* Primary Brand & Accents */
-  --color-primary:       #6366f1;
-  --color-primary-soft:  rgba(99, 102, 241, 0.15);
-  --color-primary-glow:  rgba(99, 102, 241, 0.35);
+  --color-primary:       #06d6a0;
+  --color-primary-soft:  rgba(6, 214, 160, 0.12);
+  --color-primary-glow:  rgba(6, 214, 160, 0.35);
 
-  --color-accent:        #06b6d4;
-  --color-accent-soft:   rgba(6, 182, 212, 0.12);
+  --color-accent:        #0ea5e9;
+  --color-accent-soft:   rgba(14, 165, 233, 0.12);
 
   /* Status Colors */
-  --color-success:       #10b981;
+  --color-success:       #06d6a0;
   --color-warning:       #f59e0b;
-  --color-danger:        #ef4444;
+  --color-danger:        #e76f6f;
 
   /* Text & Typography */
-  --color-text:          #f1f5f9;
-  --color-text-muted:    #94a3b8;
-  --color-text-subtle:   #64748b;
+  --color-text:          #eaf7f4;
+  --color-text-muted:    #a8c0bb;
+  --color-text-subtle:   #708983;
 
   /* Gradients */
-  --gradient-primary:     linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
-  --gradient-card:        linear-gradient(145deg, rgba(99,102,241,0.08), rgba(6,182,212,0.04));
-  --gradient-user-bubble: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(6,182,212,0.06) 0%, transparent 60%);
+  --gradient-primary:     linear-gradient(135deg, #06d6a0 0%, #05b98a 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(6,214,160,0.08), rgba(13,148,136,0.04));
+  --gradient-user-bubble: linear-gradient(135deg, #06d6a0 0%, #05b98a 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(6,214,160,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(13,148,136,0.06) 0%, transparent 60%);
 
   /* Glass & Overlays */
-  --glass-bg:            rgba(17, 24, 39, 0.75);
-  --glass-border:        1px solid rgba(99, 143, 255, 0.15);
+  --glass-bg:            rgba(11, 33, 29, 0.85);
+  --glass-border:        1px solid rgba(220, 245, 240, 0.12);
   --glass-blur:          blur(12px);
-  --drawer-overlay-bg:   rgba(0, 0, 0, 0.55);
-  --modal-overlay-bg:    rgba(0, 0, 0, 0.75);
+  --drawer-overlay-bg:   rgba(6, 20, 18, 0.7);
+  --modal-overlay-bg:    rgba(6, 20, 18, 0.85);
 
   /* Code Blocks */
-  --code-bg:             #0f172a;
-  --code-border:         rgba(99, 143, 255, 0.15);
-  --code-text:           #e2e8f0;
+  --code-bg:             #040d0c;
+  --code-border:         rgba(220, 245, 240, 0.12);
+  --code-text:           #eaf7f4;
 
   /* Shadows */
   --shadow-sm:           0 1px 3px rgba(0,0,0,0.4);
   --shadow-md:           0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg:           0 8px 40px rgba(0,0,0,0.6);
-  --shadow-glow:         0 0 32px rgba(99,102,241,0.25);
-  --scrollbar-thumb:     rgba(99, 102, 241, 0.3);
-  --scrollbar-thumb-hover: rgba(99, 102, 241, 0.5);
+  --shadow-glow:         0 0 32px rgba(6,214,160,0.25);
+  --scrollbar-thumb:     rgba(6, 214, 160, 0.3);
+  --scrollbar-thumb-hover: rgba(6, 214, 160, 0.5);
 
   /* Spacing */
   --space-xs:  4px;
@@ -100,20 +100,20 @@
   --theme: light;
 
   /* Base & Surfaces */
-  --color-bg:            #f8fafc;
+  --color-bg:            #f3faf7;
   --color-surface:       #ffffff;
-  --color-surface-2:     #f1f5f9;
-  --color-surface-3:     #e2e8f0;
-  --color-surface-4:     #cbd5e1;
+  --color-surface-2:     #e8f5f0;
+  --color-surface-3:     #e1f2ec;
+  --color-surface-4:     #c4dfd7;
 
   /* Borders & Dividers */
-  --color-border:        rgba(99, 102, 241, 0.14);
-  --color-border-hover:  rgba(99, 102, 241, 0.32);
+  --color-border:        #d9ebe5;
+  --color-border-hover:  rgba(6, 185, 138, 0.35);
 
   /* Primary Brand & Accents */
-  --color-primary:       #4f46e5;
-  --color-primary-soft:  rgba(79, 70, 229, 0.1);
-  --color-primary-glow:  rgba(79, 70, 229, 0.2);
+  --color-primary:       #06b98a;
+  --color-primary-soft:  rgba(6, 185, 138, 0.11);
+  --color-primary-glow:  rgba(6, 185, 138, 0.25);
 
   --color-accent:        #0284c7;
   --color-accent-soft:   rgba(2, 132, 199, 0.1);
@@ -121,22 +121,22 @@
   /* Status Colors */
   --color-success:       #059669;
   --color-warning:       #d97706;
-  --color-danger:        #dc2626;
+  --color-danger:        #d9534f;
 
   /* Text & Typography */
-  --color-text:          #0f172a;
-  --color-text-muted:    #475569;
-  --color-text-subtle:   #64748b;
+  --color-text:          #12332b;
+  --color-text-muted:    #55736a;
+  --color-text-subtle:   #78928a;
 
   /* Gradients */
-  --gradient-primary:     linear-gradient(135deg, #4f46e5 0%, #0284c7 100%);
-  --gradient-card:        linear-gradient(145deg, rgba(79,70,229,0.06), rgba(2,132,199,0.04));
-  --gradient-user-bubble: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(79,70,229,0.05) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(2,132,199,0.04) 0%, transparent 60%);
+  --gradient-primary:     linear-gradient(135deg, #06b98a 0%, #049a73 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(6,185,138,0.06), rgba(2,132,199,0.04));
+  --gradient-user-bubble: linear-gradient(135deg, #06b98a 0%, #049a73 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(6,185,138,0.05) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(2,132,199,0.04) 0%, transparent 60%);
 
   /* Glass & Overlays */
   --glass-bg:            rgba(255, 255, 255, 0.85);
-  --glass-border:        1px solid rgba(226, 232, 240, 0.9);
+  --glass-border:        1px solid rgba(217, 235, 229, 0.9);
   --glass-blur:          blur(12px);
   --drawer-overlay-bg:   rgba(15, 23, 42, 0.35);
   --modal-overlay-bg:    rgba(15, 23, 42, 0.6);
