@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Union
-from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── Application ──────────────────────────────────────────
+    # ── Application ───────────────────────────────────────────
     app_name: str = "EduGuardian AI Chatbot Backend"
     app_version: str = "1.0.0"
     app_env: str = "development"
@@ -32,11 +32,20 @@ class Settings(BaseSettings):
             return self.cors_origins
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
-    # ── Database ─────────────────────────────────────────────
+    # ── Database ──────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/eduguardian_chatbot"
     db_pool_size: int = 10
     db_max_overflow: int = 20
     db_echo: bool = False
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def ensure_async_db_url(cls, v: str) -> str:
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
 
     # ── LLM Gateway & Direct Groq Configuration ──────────────
     llm_provider: str = "auto"  # "auto" | "groq" | "omniroute"
@@ -57,11 +66,11 @@ class Settings(BaseSettings):
     a2a_timeout_seconds: float = 30.0
     a2a_use_remote_services: bool = True  # Official a2a-sdk HTTP client to agent microservices
 
-    # ── JWT Verification (Auth teammate issues tokens) ───────
+    # ── JWT Verification (Auth teammate issues tokens) ────────
     jwt_secret_key: str = "eduguardian-super-secret-key-2024"
     jwt_algorithm: str = "HS256"
 
-    # ── Student Context Caching ──────────────────────────────
+    # ── Student Context Caching ───────────────────────────────
     student_context_cache_ttl_seconds: int = 3600
 
 

@@ -27,7 +27,13 @@ from chatbot.backend.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-is_sqlite = "sqlite" in settings.database_url
+db_url = settings.database_url
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+is_sqlite = "sqlite" in db_url
 engine_kwargs = {
     "echo": settings.db_echo,
 }
@@ -39,7 +45,7 @@ if not is_sqlite:
     })
 
 engine = create_async_engine(
-    settings.database_url,
+    db_url,
     **engine_kwargs,
 )
 

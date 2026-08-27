@@ -2,8 +2,10 @@
 .env
 .env.local
 .env.*.local
+*.env
 chatbot/backend/.env
 chatbot/frontend/.env
+edu-backend/.env
 
 # -- Virtual environments -----------------------------------
 .venv/
@@ -11,13 +13,17 @@ venv/
 env/
 ENV/
 
-# -- Node / Frontend ----------------------------------------
-chatbot/frontend/node_modules/
-chatbot/frontend/dist/
-chatbot/frontend/.vite/
+# -- Node / Frontend modules & builds -----------------------
+**/node_modules/
+**/dist/
+**/.vite/
+node_modules/
+dist/
+.vite/
 
 # -- Python bytecode & caches -------------------------------
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -34,6 +40,7 @@ htmlcov/
 .coverage
 coverage.xml
 chatbot/tests/
+tests/
 
 # -- Database files (never copy local DBs into container) ---
 *.db
@@ -53,9 +60,11 @@ Thumbs.db
 .git/
 .gitignore
 
-# -- Logs --------------------------------------------------
+# -- Logs & uploads -----------------------------------------
 *.log
 logs/
+uploads/
+**/uploads/
 
 # -- Windows scripts ----------------------------------------
 start_all.bat

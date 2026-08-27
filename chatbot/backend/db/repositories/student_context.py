@@ -397,9 +397,10 @@ class PortalAcademicDataProvider(AcademicDataProvider):
             # pyrefly: ignore [missing-import]
             import asyncpg
 
-            db_host = "db" if (os.path.exists("/.dockerenv") or "@db:" in os.getenv("DATABASE_URL", "")) else "localhost"
-            password = os.getenv("POSTGRES_PASSWORD", "azmal123")
-            conn = await asyncpg.connect(f"postgresql://postgres:{password}@{db_host}:5432/eduguardian")
+            db_host = "db" if (os.path.exists("/.dockerenv") or "@db:" in os.getenv("DATABASE_URL", "") or "db:5432" in os.getenv("DATABASE_URL", "")) else "localhost"
+            user = os.getenv("POSTGRES_USER", "postgres")
+            password = os.getenv("POSTGRES_PASSWORD", "postgres")
+            conn = await asyncpg.connect(f"postgresql://{user}:{password}@{db_host}:5432/eduguardian")
             try:
                 query = """
                     SELECT s.id, u.id as user_id, u.full_name, u.email, s.usn, s.department, s.semester, s.section

@@ -1,4 +1,6 @@
 
+\connect eduguardian
+
         INSERT INTO users (full_name, email, password_hash, role, is_active)
         VALUES ('Rahul Sharma', 'rahul.sharma@eduguardian.ai', '$2b$10$dtQgBfvzhW5zFEmswPxe0.pjWqjGlhcqoCoOOQRcc7fNJn2gycGuW', 'student', true)
         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name;
