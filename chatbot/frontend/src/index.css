@@ -1,0 +1,211 @@
+/* ============================================================
+   EduGuardian AI Chatbot — Design System
+   Universal Theme Tokens (Dark & Light)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── Default Dark Theme ───────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --theme: dark;
+
+  /* Base & Surfaces */
+  --color-bg:            #061412;
+  --color-surface:       #0b211d;
+  --color-surface-2:     #102a25;
+  --color-surface-3:     #15352f;
+  --color-surface-4:     #1f453e;
+
+  /* Borders & Dividers */
+  --color-border:        rgba(220, 245, 240, 0.1);
+  --color-border-hover:  rgba(6, 214, 160, 0.3);
+
+  /* Primary Brand & Accents */
+  --color-primary:       #06d6a0;
+  --color-primary-soft:  rgba(6, 214, 160, 0.12);
+  --color-primary-glow:  rgba(6, 214, 160, 0.35);
+
+  --color-accent:        #0ea5e9;
+  --color-accent-soft:   rgba(14, 165, 233, 0.12);
+
+  /* Status Colors */
+  --color-success:       #06d6a0;
+  --color-warning:       #f59e0b;
+  --color-danger:        #e76f6f;
+
+  /* Text & Typography */
+  --color-text:          #eaf7f4;
+  --color-text-muted:    #a8c0bb;
+  --color-text-subtle:   #708983;
+
+  /* Gradients */
+  --gradient-primary:     linear-gradient(135deg, #06d6a0 0%, #05b98a 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(6,214,160,0.08), rgba(13,148,136,0.04));
+  --gradient-user-bubble: linear-gradient(135deg, #06d6a0 0%, #05b98a 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(6,214,160,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(13,148,136,0.06) 0%, transparent 60%);
+
+  /* Glass & Overlays */
+  --glass-bg:            rgba(11, 33, 29, 0.85);
+  --glass-border:        1px solid rgba(220, 245, 240, 0.12);
+  --glass-blur:          blur(12px);
+  --drawer-overlay-bg:   rgba(6, 20, 18, 0.7);
+  --modal-overlay-bg:    rgba(6, 20, 18, 0.85);
+
+  /* Code Blocks */
+  --code-bg:             #040d0c;
+  --code-border:         rgba(220, 245, 240, 0.12);
+  --code-text:           #eaf7f4;
+
+  /* Shadows */
+  --shadow-sm:           0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:           0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg:           0 8px 40px rgba(0,0,0,0.6);
+  --shadow-glow:         0 0 32px rgba(6,214,160,0.25);
+  --scrollbar-thumb:     rgba(6, 214, 160, 0.3);
+  --scrollbar-thumb-hover: rgba(6, 214, 160, 0.5);
+
+  /* Spacing */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+
+  /* Radius */
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast:   all 0.15s ease;
+  --transition-normal: all 0.25s ease;
+  --transition-slow:   all 0.4s ease;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-size-xs:  11px;
+  --font-size-sm:  13px;
+  --font-size-md:  15px;
+  --font-size-lg:  18px;
+  --font-size-xl:  24px;
+  --font-size-2xl: 32px;
+}
+
+/* ── Light Theme ──────────────────────────────────────────── */
+[data-theme="light"] {
+  --theme: light;
+
+  /* Base & Surfaces */
+  --color-bg:            #f3faf7;
+  --color-surface:       #ffffff;
+  --color-surface-2:     #e8f5f0;
+  --color-surface-3:     #e1f2ec;
+  --color-surface-4:     #c4dfd7;
+
+  /* Borders & Dividers */
+  --color-border:        #d9ebe5;
+  --color-border-hover:  rgba(6, 185, 138, 0.35);
+
+  /* Primary Brand & Accents */
+  --color-primary:       #06b98a;
+  --color-primary-soft:  rgba(6, 185, 138, 0.11);
+  --color-primary-glow:  rgba(6, 185, 138, 0.25);
+
+  --color-accent:        #0284c7;
+  --color-accent-soft:   rgba(2, 132, 199, 0.1);
+
+  /* Status Colors */
+  --color-success:       #059669;
+  --color-warning:       #d97706;
+  --color-danger:        #d9534f;
+
+  /* Text & Typography */
+  --color-text:          #12332b;
+  --color-text-muted:    #55736a;
+  --color-text-subtle:   #78928a;
+
+  /* Gradients */
+  --gradient-primary:     linear-gradient(135deg, #06b98a 0%, #049a73 100%);
+  --gradient-card:        linear-gradient(145deg, rgba(6,185,138,0.06), rgba(2,132,199,0.04));
+  --gradient-user-bubble: linear-gradient(135deg, #06b98a 0%, #049a73 100%);
+  --app-bg-gradient:      radial-gradient(ellipse at 20% 20%, rgba(6,185,138,0.05) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(2,132,199,0.04) 0%, transparent 60%);
+
+  /* Glass & Overlays */
+  --glass-bg:            rgba(255, 255, 255, 0.85);
+  --glass-border:        1px solid rgba(217, 235, 229, 0.9);
+  --glass-blur:          blur(12px);
+  --drawer-overlay-bg:   rgba(15, 23, 42, 0.35);
+  --modal-overlay-bg:    rgba(15, 23, 42, 0.6);
+
+  /* Code Blocks */
+  --code-bg:             #f1f5f9;
+  --code-border:         #e2e8f0;
+  --code-text:           #0f172a;
+
+  /* Shadows */
+  --shadow-sm:           0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md:           0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:           0 8px 40px rgba(0,0,0,0.12);
+  --shadow-glow:         0 0 24px rgba(79,70,229,0.18);
+  --scrollbar-thumb:     rgba(79, 70, 229, 0.25);
+  --scrollbar-thumb-hover: rgba(79, 70, 229, 0.45);
+}
+
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  line-height: 1.6;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+/* ── Scrollbars ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ── Focus / Accessibility ────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Utility classes ──────────────────────────────────────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+
+/* ── App Root ─────────────────────────────────────────────── */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

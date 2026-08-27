@@ -1,0 +1,144 @@
+/* TypingIndicator.css — Agent-Aware Real-Time Status Card */
+
+.typing-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: agent-card-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  max-width: 90%;
+}
+
+@keyframes agent-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.typing-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(6, 214, 160, 0.2) 0%, rgba(84, 149, 255, 0.2) 100%);
+  border: 1px solid rgba(6, 214, 160, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(6, 214, 160, 0.15);
+  animation: agent-avatar-glow 2.5s infinite ease-in-out;
+}
+
+@keyframes agent-avatar-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(6, 214, 160, 0.15);
+    border-color: rgba(6, 214, 160, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(6, 214, 160, 0.35);
+    border-color: rgba(6, 214, 160, 0.65);
+  }
+}
+
+.typing-agent-emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.typing-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  background: rgba(18, 26, 36, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(6, 214, 160, 0.22);
+  border-radius: 14px;
+  border-top-left-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  min-width: 220px;
+  transition: all 0.25s ease;
+}
+
+.typing-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.typing-agent-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary, #06d6a0);
+  letter-spacing: -0.1px;
+}
+
+.typing-agent-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(6, 214, 160, 0.15);
+  color: var(--primary, #06d6a0);
+  border: 1px solid rgba(6, 214, 160, 0.3);
+  animation: badge-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+.typing-agent-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.typing-action-text {
+  font-size: 12px;
+  color: var(--color-text-muted, #94a3b8);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary, #06d6a0);
+  animation: typing-bounce 1.3s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0s; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0) scale(0.75);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-3px) scale(1.15);
+    opacity: 1;
+  }
+}

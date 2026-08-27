@@ -1,0 +1,175 @@
+/* ChatWindow.css */
+
+.chat-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-xl) var(--space-lg);
+  gap: var(--space-md);
+  scroll-behavior: smooth;
+}
+
+.chat-messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+/* ── Empty state ──────────────────────────────────────────── */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: var(--space-xl) var(--space-md);
+  animation: fade-in 0.4s ease;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.chat-empty-icon {
+  font-size: 52px;
+  margin-bottom: var(--space-md);
+  display: inline-block;
+  animation: wave 2.2s infinite;
+  transform-origin: 70% 70%;
+}
+
+@keyframes wave {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(14deg); }
+  20%  { transform: rotate(-8deg); }
+  30%  { transform: rotate(14deg); }
+  40%  { transform: rotate(-4deg); }
+  50%  { transform: rotate(10deg); }
+  60%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.chat-empty-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-xs);
+  letter-spacing: -0.3px;
+}
+
+.chat-empty-subtitle {
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  max-width: 480px;
+  line-height: 1.6;
+  margin-bottom: var(--space-xl);
+}
+
+.chat-empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+  max-width: 580px;
+}
+
+.empty-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: inherit;
+  box-shadow: var(--shadow-sm);
+}
+
+.empty-chip:hover {
+  background: var(--color-surface-3);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.empty-chip-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.empty-chip-label {
+  font-weight: 500;
+}
+
+/* ── Study Plan Badge ─────────────────────────────────────── */
+.plan-badge-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-md) 0;
+}
+
+.plan-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-family);
+  animation: slide-up 0.3s ease;
+  max-width: 90%;
+}
+
+.plan-badge:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow);
+}
+
+.plan-badge-icon { font-size: 20px; }
+
+.plan-badge-text-group {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.plan-badge-text {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plan-badge-subtext {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.plan-badge-arrow { color: var(--color-primary); font-weight: 700; font-size: 16px; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

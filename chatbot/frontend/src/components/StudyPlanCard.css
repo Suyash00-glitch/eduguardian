@@ -1,0 +1,235 @@
+/* StudyPlanCard.css */
+
+.plan-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-overlay-bg);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+  animation: overlay-in 0.2s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.plan-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  max-width: 720px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg), 0 0 30px var(--color-primary-glow);
+  animation: card-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* ── Plan Header ─────────────────────────────────────────────── */
+.plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-md);
+}
+
+.plan-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.plan-icon { font-size: 36px; }
+
+.plan-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.plan-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.plan-meta-divider {
+  color: var(--color-text-subtle);
+}
+
+.plan-progress-pill {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.plan-close {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.plan-close:hover {
+  background: var(--color-surface-3);
+  color: var(--color-text);
+}
+
+/* ── Sections ────────────────────────────────────────────────── */
+.plan-section {
+  margin-bottom: var(--space-xl);
+}
+
+.plan-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-md);
+}
+
+/* ── Goals ───────────────────────────────────────────────────── */
+.plan-goals { list-style: none; display: flex; flex-direction: column; gap: var(--space-sm); }
+.plan-goal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+.plan-goal::before {
+  content: '🎯';
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Day schedule ────────────────────────────────────────────── */
+.plan-days { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.plan-day {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.plan-day-name {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.plan-task {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.plan-task:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-surface-2);
+}
+
+.plan-task.task-completed {
+  opacity: 0.65;
+  background: var(--color-surface-2);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.plan-task-checkbox {
+  margin-top: 4px;
+}
+
+.plan-task-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.plan-task-body {
+  flex: 1;
+}
+
+.plan-task:last-child { margin-bottom: 0; }
+
+.plan-task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.plan-task-time { font-size: var(--font-size-xs); color: var(--color-accent); font-weight: 600; }
+.plan-task-priority {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.priority-high   { background: rgba(239,68,68,0.15); color: var(--color-danger); }
+.priority-medium { background: rgba(245,158,11,0.15); color: var(--color-warning); }
+.priority-low    { background: rgba(16,185,129,0.15); color: var(--color-success); }
+
+.plan-task-subject { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+.plan-task-activity { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 2px; }
+.plan-task-activity.strikethrough { text-decoration: line-through; color: var(--color-text-subtle); }
+.plan-task-description { font-size: var(--font-size-xs); color: var(--color-text-subtle); margin-top: 4px; }
+.plan-task-duration { font-size: var(--font-size-xs); color: var(--color-text-subtle); margin-top: 4px; }
+
+/* ── Resources / Notes ────────────────────────────────────────── */
+.plan-resources { list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
+.plan-resource { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.plan-resource::before { content: '→ '; color: var(--color-accent); }
+
+.plan-notes {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  background: var(--color-accent-soft);
+  border: 1px solid rgba(6,182,212,0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  line-height: 1.7;
+}

@@ -1,0 +1,64 @@
+# -- Secrets & environment files ---------------------------
+.env
+.env.local
+.env.*.local
+chatbot/backend/.env
+chatbot/frontend/.env
+
+# -- Virtual environments -----------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# -- Node / Frontend ----------------------------------------
+chatbot/frontend/node_modules/
+chatbot/frontend/dist/
+chatbot/frontend/.vite/
+
+# -- Python bytecode & caches -------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+.eggs/
+
+# -- Test / Coverage ----------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+chatbot/tests/
+
+# -- Database files (never copy local DBs into container) ---
+*.db
+*.sqlite
+*.sqlite3
+eduguardian_chatbot.db
+
+# -- IDE & OS files -----------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# -- Git ----------------------------------------------------
+.git/
+.gitignore
+
+# -- Logs --------------------------------------------------
+*.log
+logs/
+
+# -- Windows scripts ----------------------------------------
+start_all.bat
+start_all.ps1
+start_background.ps1
+stop_all.bat

@@ -1,0 +1,170 @@
+/* InputBar.css */
+
+.input-bar-wrapper {
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border-top: var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* ── Quick prompt chips ─────────────────────────────────────── */
+.quick-prompts-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-xs);
+  margin-bottom: var(--space-xs);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.quick-prompts {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-xs);
+  width: max-content;
+}
+
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: inherit;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.quick-chip:hover:not(:disabled) {
+  background: var(--color-surface-3);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.quick-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.quick-chip-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.quick-chip-label {
+  font-weight: 500;
+}
+
+/* ── Input row ──────────────────────────────────────────────── */
+.input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 6px 6px 6px var(--space-md);
+  transition: var(--transition-fast);
+}
+
+.input-bar:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+
+.input-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  line-height: 1.5;
+  min-height: 24px;
+  max-height: 140px;
+  padding: 6px 0;
+}
+
+.input-textarea::placeholder {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.input-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Send button ────────────────────────────────────────────── */
+.send-button {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-surface-3);
+  color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.send-button.send-active {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-glow);
+}
+
+.send-button.send-active:hover {
+  transform: scale(1.05);
+}
+
+.send-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Spinner for loading state */
+.send-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.input-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  text-align: center;
+  margin-top: 6px;
+  margin-bottom: 0;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .input-bar-wrapper {
+    padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  }
+
+  .input-hint {
+    display: none;
+  }
+}
