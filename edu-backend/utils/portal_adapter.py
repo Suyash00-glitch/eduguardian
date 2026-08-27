@@ -314,7 +314,7 @@ def fetch_portal_student_data(
     )
 
     # 2. Attendance
-    att_url = f"{APP_ENDPOINT}?a=viewAttendanceDetsummary&univcode={univcode}&date={today}"
+    att_url = f"{APP_ENDPOINT}?a=viewAttendanceDetsummary&univcode={univcode}"
     att_status, att_raw = _do_get(opener, att_url)
     raw_attendance = None
     att_parsed = _json_safe(att_raw)
@@ -491,8 +491,56 @@ def normalize_student_context(
     # Attendance
     attendance_data: Dict[str, Any] = {"value": None, "status": "not_available", "records": []}
     if attendance:
-        records = attendance if isinstance(attendance, list) else [attendance]
-        if isinstance(attendance, list) and attendance:
+       records = attendance if isinstance(attendance, list) else [attendance]
+    if isinstance(attendance, list) and attendance:
+            def _iv(item, *ks) -> int:
+                for k in ks:
+                    v = item.get(k)
+                    if v is not None:
+                        try:
+                            return int(str(v).strip() or "0")
+                        except (ValueError, TypeError):
+                            pass
+                return 0
+
+            held = sum(_iv(r, "conducted", "HELD", "held", "FCLSHELD", "fclsheld", "classes_held", "TOTAL") for r in records)
+            attended = sum(_iv(r, "attended", "ATTENDED", "FCLSATT", "fclsatt", "classes_attended", "PRESENT") for r in records)
+
+            # Map college portal keys to the keys the React UI is looking for
+            formatted_records = []
+            for r in records:
+                r_held = _iv(r, "conducted", "HELD", "held", "classes_held")
+                r_att = _iv(r, "attended", "ATTENDED", "attended", "classes_attended")
+                pct = round((r_att / r_held * 100), 2) if r_held > 0 else 0.0
+                formatted_records.append({
+                    **r,
+                    "subject": r.get("fsubname") or r.get("subject") or r.get("subject_name"),
+                    "subject_name": r.get("fsubname") or r.get("subject") or r.get("subject_name"),
+                    "subject_code": r.get("fsubcode") or r.get("subject_code"),
+                    "classes_held": r_held,
+                    "held": r_held,
+                    "classes_attended": r_att,
+                    "attended": r_att,
+                    "attendance_percentage": pct,
+                    "percentage": pct,
+                    "status": "Safe" if pct >= 75.0 else "Attention"
+                })
+
+            if held > 0:
+                attendance_data = {
+                    "value": round(attended / held * 100, 2),
+                    "status": "available",
+                    "classes_held": held,
+                    "classes_attended": attended,
+                    "records": formatted_records,
+                }
+            else:
+                attendance_data = {
+                    "value": None,
+                    "status": "not_available",
+                    "note": "Current semester attendance records are pending faculty upload.",
+                    "records": formatted_records,
+                }
             def _iv(item, *ks) -> int:
                 for k in ks:
                     v = item.get(k)
@@ -500,7 +548,7 @@ def normalize_student_context(
                         try: return int(str(v).strip() or "0")
                         except: pass
                 return 0
-            held     = sum(_iv(r, "HELD","held","FCLSHELD","fclsheld","classes_held","TOTAL") for r in records)
+            held     = sum(_iv(r, "conducted", "HELD","held","FCLSHELD","fclsheld","classes_held","TOTAL") for r in records)
             attended = sum(_iv(r, "ATTENDED","attended","FCLSATT","fclsatt","classes_attended","PRESENT") for r in records)
             if held > 0:
                 attendance_data = {
@@ -517,7 +565,7 @@ def normalize_student_context(
                     "note": "Current semester attendance records are pending faculty upload.",
                     "records": records,
                 }
-        elif isinstance(attendance, dict):
+    elif isinstance(attendance, dict):
             pv = _pick_float(attendance, "PERCENTAGE","percentage","FPERCENTAGE","fpercentage")
             if pv is not None:
                 attendance_data = {"value": pv, "status": "available", "records": [attendance]}

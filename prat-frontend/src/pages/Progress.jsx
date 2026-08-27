@@ -32,8 +32,51 @@ function Progress() {
     try {
       const portalCtx = await studentService.getPortalContext();
       setCtx(portalCtx);
-      const attData = await studentService.getAttendance();
-      setAttendance(attData || []);
+
+      let attData = await studentService.getAttendance();
+      
+      // Fallback to portalCtx if getAttendance is empty
+      if (!Array.isArray(attData) || attData.length === 0) {
+        attData = portalCtx?.attendance?.records || [];
+      }
+
+      // Robust field normalization (handles camelCase, snake_case, and portal raw keys)
+      const normalized = (attData || []).map((item) => {
+        const held = Number(
+          item.classesHeld ?? item.conducted ?? item.held ?? item.classes_held ?? 0
+        );
+        const attended = Number(
+          item.classesAttended ?? item.attended ?? item.classes_attended ?? 0
+        );
+        const pct =
+          item.percentage !== undefined && item.percentage !== null
+            ? Number(item.percentage)
+            : item.attendance_percentage !== undefined && item.attendance_percentage !== null
+            ? Number(item.attendance_percentage)
+            : held > 0
+            ? Number(((attended / held) * 100).toFixed(1))
+            : 0;
+
+        return {
+          subjectCode:
+            item.subjectCode ||
+            item.fsubcode ||
+            item.subject_code ||
+            item.code ||
+            "—",
+          subjectName:
+            item.subjectName ||
+            item.fsubname ||
+            item.subject_name ||
+            item.subject ||
+            "Subject",
+          classesHeld: held,
+          classesAttended: attended,
+          percentage: pct,
+        };
+      });
+
+      setAttendance(normalized);
     } catch (err) {
       setError(err.message || "Unable to load progress.");
     } finally {
@@ -62,7 +105,7 @@ function Progress() {
   const isPortal = ctx?.data_source === "student_portal";
   const histPerf = ctx?.historical_academic_performance || {};
   const histSems = ctx?.historical_semesters || [];
-  const currentSem = ctx?.identity?.semester || 5;
+  const currentSem = ctx?.identity?.semester || 7;
 
   const cgpaDisplay = histPerf.cgpa ? Number(histPerf.cgpa).toFixed(2) : null;
   const sgpaDisplay = histPerf.latest_sgpa ? Number(histPerf.latest_sgpa).toFixed(2) : null;
@@ -123,7 +166,7 @@ function Progress() {
         <ProgressCard
           icon={TrendingUp}
           value={sgpaDisplay ? sgpaDisplay : "—"}
-          label={`Latest SGPA (Sem ${completedSems || 4})`}
+          label={`Latest SGPA (Sem ${completedSems || 6})`}
           sub="Semester examination"
         />
 
@@ -142,7 +185,7 @@ function Progress() {
         />
       </div>
 
-      {/* 1. CURRENT SEMESTER (SEMESTER 5) ATTENDANCE */}
+      {/* 1. CURRENT SEMESTER ATTENDANCE */}
       <section className="progress-section">
         <div className="progress-section-heading">
           <div>
@@ -163,12 +206,12 @@ function Progress() {
                 <span>STATUS</span>
               </div>
 
-              {attendance.map((item) => {
+              {attendance.map((item, idx) => {
                 const percentage = Number(item.percentage || 0);
                 const good = percentage >= 75;
 
                 return (
-                  <div className="attendance-row" key={item.subjectCode}>
+                  <div className="attendance-row" key={item.subjectCode || idx}>
                     <div className="subject-cell">
                       <strong>{item.subjectCode}</strong>
                       <span>{item.subjectName}</span>
@@ -272,7 +315,7 @@ function Progress() {
                       color: "var(--primary)",
                     }}
                   >
-                    {sem.result_class || "PASS"}
+                    {sem.result_class || sem.result || "PASS"}
                   </span>
                 </div>
 

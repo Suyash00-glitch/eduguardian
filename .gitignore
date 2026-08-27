@@ -1,77 +1,51 @@
-# =========================
-# Python Backend
-# =========================
-
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-.venv/
-venv/
-env/
-ENV/
-
-# Environment variables / secrets
+# Environment & Secrets
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
+*.env
 
-# =========================
-# Python tooling
-# =========================
-
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# =========================
-# Node / React
-# =========================
-
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Build output
 dist/
 build/
-.vite/
+.npm/
 
-# =========================
-# Uploads / generated files
-# =========================
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+.installed.cfg
+*.egg
 
-uploads/*
-!uploads/.gitkeep
+# Database / SQLite / Backups
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.sql.gz
 
-# =========================
-# IDE / OS
-# =========================
+# Docker
+.docker/
 
-.vscode/
-.idea/
-*.iml
-
+# OS / Editor files
 .DS_Store
 Thumbs.db
-
-# =========================
-# Logs
-# =========================
-
-*.log
-
-# =========================
-# Temporary files / Archives
-# =========================
-
-*.tmp
-*.temp
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
 *.swp
-*.zip
-eduguardian/
+*.swo
+
+# Testing / Coverage
+coverage/
+.pytest_cache/

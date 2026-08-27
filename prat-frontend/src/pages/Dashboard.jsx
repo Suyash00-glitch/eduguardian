@@ -2,20 +2,16 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
-  ClipboardCheck,
-  Clock3,
   TrendingDown,
   TrendingUp,
   Activity,
   Target,
   Sparkles,
-  AlertTriangle,
-  Info,
   Award,
-  BookOpen,
   FileText,
   Minus,
   ShieldCheck,
+  ShieldAlert,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -80,501 +76,270 @@ function Dashboard() {
     );
   }
 
-  const isPortal = data?.data_source === "student_portal";
   const identity = data?.identity || {};
   const histPerf = data?.historical_academic_performance || {};
-  const riskInfo = data?.risk || {};
   const studentName = identity.name || user?.name || user?.full_name || "Student";
   const studentUSN = identity.usn || user?.usn;
-  const currentSem = identity.semester || user?.semester || 5;
 
-  // Attendance & Assessment status flags
+  // Attendance metrics
   const attAvailable = data.attendance?.status === "available" && data.attendance.value !== null;
-  const attValue = data.attendance?.value;
-  const assessAvailable = data.assessments?.status === "available" && data.assessments.value !== null;
-  const assessValue = data.assessments?.value;
+  const attValue = data.attendance?.value !== undefined ? Number(data.attendance.value) : null;
 
-  const cgpaDisplay = histPerf.cgpa !== null && histPerf.cgpa !== undefined ? Number(histPerf.cgpa).toFixed(2) : null;
-  const sgpaDisplay = histPerf.latest_sgpa !== null && histPerf.latest_sgpa !== undefined ? Number(histPerf.latest_sgpa).toFixed(2) : null;
-  const trend = histPerf.sgpa_trend || "stable";
+  const cgpa = histPerf.cgpa !== null && histPerf.cgpa !== undefined ? Number(histPerf.cgpa) : null;
+  const sgpa = histPerf.latest_sgpa !== null && histPerf.latest_sgpa !== undefined ? Number(histPerf.latest_sgpa) : null;
+  const arrearsCount = Number(histPerf.arrears_count || 0);
   const completedSems = histPerf.completed_semesters || (data.historical_semesters?.length || 0);
+  const totalCredits = histPerf.total_credits_earned || 0;
 
-  // Dynamic Academic Standing & Supportive Guidance
+  // Real-time Early Dropout / Detention Risk Calculation
+  let riskLevel = "LOW";
+  let riskColor = "var(--primary)";
+  let riskBg = "rgba(6,214,160,0.12)";
+  let riskDescription = "Good standing. Keep maintaining regular attendance and exam performance.";
+
+  if (arrearsCount >= 3 || (attAvailable && attValue !== null && attValue < 65)) {
+    riskLevel = "CRITICAL";
+    riskColor = "var(--danger, #e76f6f)";
+    riskBg = "rgba(231,111,111,0.15)";
+    riskDescription = "High risk of academic probation or exam detainment due to backlogs / low attendance.";
+  } else if (arrearsCount > 0 || (attAvailable && attValue !== null && attValue < 75) || (cgpa && cgpa < 6.0)) {
+    riskLevel = "MODERATE";
+    riskColor = "#ffd166";
+    riskBg = "rgba(255,209,102,0.15)";
+    riskDescription = "Attendance or backlog warnings detected. Review subjects falling below 75%.";
+  }
+
   const academicStanding = deriveAcademicStanding(histPerf, data.academic_guidance);
 
   return (
     <div className="dashboard-page">
-      {/* Header */}
-      <div className="dashboard-welcome">
+      {/* HEADER */}
+      <div className="dashboard-welcome" style={{ marginBottom: "20px" }}>
         <div>
           <span className="dashboard-eyebrow">ACADEMIC OVERVIEW</span>
-          <h2>Good afternoon, {studentName}.</h2>
-          <p>
-            {isPortal
-              ? `Academic status synchronized with University Solutions Student Portal (USN: ${studentUSN || "—"}).`
-              : "Here's how your academic journey is looking right now."}
+          <h2>Welcome back, {studentName}.</h2>
+          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--text-muted)" }}>
+            Academic status and early warning monitor (USN: {studentUSN || "—"}).
           </p>
         </div>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {isPortal && (
+      {/* TOP KPI GRID */}
+      <div className="dashboard-stats" style={{ marginBottom: "20px" }}>
+        {/* Card 1: Risk Status */}
+        <div className="dashboard-stat-card">
+          <div className="stat-card-top">
+            <div className="stat-icon">
+              {riskLevel === "LOW" ? <ShieldCheck size={17} /> : <ShieldAlert size={17} />}
+            </div>
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
                 fontSize: "11px",
-                fontWeight: 700,
-                padding: "5px 12px",
-                borderRadius: "20px",
-                background: "rgba(6,214,160,0.12)",
-                color: "var(--primary)",
-                border: "1px solid rgba(6,214,160,0.25)",
+                fontWeight: 800,
+                padding: "2px 8px",
+                borderRadius: "12px",
+                background: riskBg,
+                color: riskColor,
               }}
             >
-              <CheckCircle2 size={12} />
-              University Solutions Portal
+              {riskLevel} RISK
             </span>
-          )}
-
-          <button
-            className="dashboard-action"
-            onClick={() => navigate("/profile")}
-          >
-            View Marks Card
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* HISTORICAL ACADEMIC PERFORMANCE (AUTHORITATIVE SEMESTERS 1–4) */}
-      {(cgpaDisplay || sgpaDisplay) && (
-        <section
-          className="profile-card"
-          style={{
-            marginBottom: "20px",
-            background: "linear-gradient(135deg, rgba(6,214,160,0.06) 0%, rgba(84,149,255,0.06) 100%)",
-            border: "1px solid rgba(6,214,160,0.2)",
-          }}
-        >
-          <div style={{ padding: "18px 22px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Award size={16} style={{ color: "var(--primary)" }} />
-                <span className="dashboard-eyebrow" style={{ color: "var(--primary)" }}>
-                  HISTORICAL ACADEMIC PERFORMANCE
-                </span>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
-                {completedSems > 0 ? `Completed Semesters: 1–${completedSems}` : "Historical Standing"}
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                gap: "16px",
-              }}
-            >
-              {cgpaDisplay && (
-                <div>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
-                    CUMULATIVE CGPA
-                  </div>
-                  <div style={{ fontSize: "26px", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-                    {cgpaDisplay}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color:
-                        academicStanding.badgeTone === "warning"
-                          ? "#ffd166"
-                          : academicStanding.badgeTone === "danger"
-                          ? "var(--danger, #e76f6f)"
-                          : "var(--primary)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {academicStanding.standingLabel}
-                  </div>
-                </div>
-              )}
-
-              {sgpaDisplay && (
-                <div>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
-                    LATEST SGPA {completedSems > 0 ? `(SEM ${completedSems})` : ""}
-                  </div>
-                  <div style={{ fontSize: "26px", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-                    {sgpaDisplay}
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Semester examination result
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
-                  PERFORMANCE TRAJECTORY
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "16px",
-                    fontWeight: 800,
-                    marginTop: "6px",
-                    color:
-                      trend === "improving"
-                        ? "var(--success, #06d6a0)"
-                        : trend === "declining"
-                        ? "var(--danger, #e76f6f)"
-                        : "var(--text)",
-                  }}
-                >
-                  {trend === "improving" && <TrendingUp size={18} />}
-                  {trend === "declining" && <TrendingDown size={18} />}
-                  {trend === "stable" && <Minus size={18} />}
-                  {trend.charAt(0).toUpperCase() + trend.slice(1)}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Semester-over-semester
-                </div>
-              </div>
-
-              {histPerf.total_credits_earned && (
-                <div>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
-                    TOTAL CREDITS
-                  </div>
-                  <div style={{ fontSize: "26px", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-                    {histPerf.total_credits_earned}
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Credits earned to date
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
-                  BACKLOGS / ARREARS
-                </div>
-                <div style={{ fontSize: "26px", fontWeight: 800, color: histPerf.arrears_count > 0 ? "var(--danger, #e76f6f)" : "var(--success, #06d6a0)", marginTop: "2px" }}>
-                  {histPerf.arrears_count ?? 0}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {histPerf.arrears_count > 0 ? "Active backlogs" : "Clear academic record"}
-                </div>
-              </div>
-            </div>
           </div>
-        </section>
-      )}
+          <div className="stat-value" style={{ color: riskColor }}>
+            {riskLevel === "LOW" ? "Safe Standing" : riskLevel === "MODERATE" ? "Monitor Closely" : "Action Required"}
+          </div>
+          <div className="stat-label">Academic Standing &amp; Risk</div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
+            {riskDescription}
+          </div>
+        </div>
 
-      {/* CURRENT SEMESTER STATUS CARDS (SEMESTER 5) */}
-      <div style={{ marginBottom: "10px" }}>
-        <span className="dashboard-eyebrow">
-          CURRENT SEMESTER {currentSem ? `(SEMESTER ${currentSem})` : ""}
-        </span>
-      </div>
-
-      <div className="dashboard-stats">
-        {/* Card 1: Attendance */}
+        {/* Card 2: Current Attendance */}
         <div className="dashboard-stat-card">
           <div className="stat-card-top">
             <div className="stat-icon">
               <Activity size={17} />
             </div>
-
             <span
               style={{
                 fontSize: "11px",
                 fontWeight: 700,
                 padding: "2px 8px",
                 borderRadius: "12px",
-                background: attAvailable ? "rgba(6,214,160,0.12)" : "rgba(255,209,102,0.12)",
-                color: attAvailable ? "var(--primary)" : "#ffd166",
+                background: attAvailable ? (attValue >= 75 ? "rgba(6,214,160,0.12)" : "rgba(231,111,111,0.15)") : "rgba(255,209,102,0.12)",
+                color: attAvailable ? (attValue >= 75 ? "var(--primary)" : "var(--danger, #e76f6f)") : "#ffd166",
               }}
             >
-              {attAvailable ? "Published" : "Pending"}
+              {attAvailable ? (attValue >= 75 ? "On Track (≥75%)" : "Shortage (<75%)") : "Pending"}
             </span>
           </div>
-
           <div className="stat-value">
             {attAvailable ? `${attValue}%` : "Pending"}
           </div>
-
           <div className="stat-label">Current Semester Attendance</div>
-
           <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
             {attAvailable
-              ? `${data.attendance.classes_attended || 0} of ${data.attendance.classes_held || 0} classes attended`
-              : "Current semester attendance has not yet been published by faculty."}
+              ? `${data.attendance.classes_attended || 0} of ${data.attendance.classes_held || 0} classes attended (Threshold: 75%)`
+              : "Attendance records are pending publication."}
           </div>
-
-          {attAvailable && (
-            <div className="stat-progress" style={{ marginTop: "8px" }}>
-              <span style={{ width: `${attValue}%` }} />
-            </div>
-          )}
         </div>
 
-        {/* Card 2: Academic Performance (Latest SGPA or Current Assessment) */}
+        {/* Card 3: Cumulative CGPA */}
+        <div className="dashboard-stat-card">
+          <div className="stat-card-top">
+            <div className="stat-icon">
+              <Award size={17} />
+            </div>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: "rgba(6,214,160,0.12)", color: "var(--primary)" }}>
+              {academicStanding.badge || "CGPA"}
+            </span>
+          </div>
+          <div className="stat-value">
+            {cgpa ? cgpa.toFixed(2) : "—"}
+          </div>
+          <div className="stat-label">Cumulative CGPA</div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
+            {completedSems > 0 ? `Evaluated across ${completedSems} completed semesters (${totalCredits} credits)` : "Official examination standings"}
+          </div>
+        </div>
+
+        {/* Card 4: Latest SGPA */}
         <div className="dashboard-stat-card">
           <div className="stat-card-top">
             <div className="stat-icon">
               <TrendingUp size={17} />
             </div>
-
             <span
               style={{
                 fontSize: "11px",
                 fontWeight: 700,
                 padding: "2px 8px",
                 borderRadius: "12px",
-                background: assessAvailable ? "rgba(6,214,160,0.12)" : "rgba(84,149,255,0.12)",
-                color: assessAvailable ? "var(--primary)" : "#5495ff",
+                background: arrearsCount === 0 ? "rgba(6,214,160,0.12)" : "rgba(231,111,111,0.15)",
+                color: arrearsCount === 0 ? "var(--primary)" : "var(--danger, #e76f6f)",
               }}
             >
-              {assessAvailable ? "Published" : sgpaDisplay ? `Sem ${completedSems} SGPA` : "Pending"}
+              {arrearsCount === 0 ? "0 Backlogs" : `${arrearsCount} Backlog${arrearsCount > 1 ? "s" : ""}`}
             </span>
           </div>
-
           <div className="stat-value">
-            {assessAvailable
-              ? `${assessValue}%`
-              : sgpaDisplay
-              ? sgpaDisplay
-              : "Pending"}
+            {sgpa ? sgpa.toFixed(2) : "—"}
           </div>
-
-          <div className="stat-label">
-            {assessAvailable
-              ? "Current Assessment Score"
-              : sgpaDisplay
-              ? `Latest SGPA (Semester ${completedSems})`
-              : "Academic Performance"}
-          </div>
-
+          <div className="stat-label">Latest SGPA {completedSems > 0 ? `(Sem ${completedSems})` : ""}</div>
           <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
-            {assessAvailable
-              ? "Current semester internal assessment average."
-              : sgpaDisplay
-              ? `Cumulative CGPA: ${cgpaDisplay || "—"} across ${completedSems} completed semesters.`
-              : "Current semester assessment records have not yet been published."}
-          </div>
-        </div>
-
-        {/* Card 3: Assignments */}
-        <div className="dashboard-stat-card">
-          <div className="stat-card-top">
-            <div className="stat-icon">
-              <ClipboardCheck size={17} />
-            </div>
-
-            <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
-              Not Tracked
-            </span>
-          </div>
-
-          <div className="stat-value" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-muted)" }}>
-            Not available
-          </div>
-
-          <div className="stat-label">Coursework / Assignments</div>
-
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
-            Assignment tracking is not integrated into this portal.
-          </div>
-        </div>
-
-        {/* Card 4: LMS Engagement */}
-        <div className="dashboard-stat-card">
-          <div className="stat-card-top">
-            <div className="stat-icon">
-              <Clock3 size={17} />
-            </div>
-
-            <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
-              Not Tracked
-            </span>
-          </div>
-
-          <div className="stat-value" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-muted)" }}>
-            Not available
-          </div>
-
-          <div className="stat-label">LMS Engagement</div>
-
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
-            LMS tracking is not integrated into this portal.
+            {arrearsCount === 0 ? "Clear academic record with zero pending arrears." : `${arrearsCount} uncleared backlog subject(s).`}
           </div>
         </div>
       </div>
 
-      {/* ACADEMIC STATUS & GUIDANCE (STUDENT-FACING) */}
-      <div className="dashboard-middle" style={{ marginTop: "24px" }}>
-        {/* Card A: Academic Status & Guidance */}
-        <div className="support-card" style={{ flex: 1 }}>
-          <div className="section-heading">
+      {/* STRATEGY & VELOCITY SECTION */}
+      <div className="dashboard-middle" style={{ marginBottom: "24px" }}>
+        {/* Left: Strategy Summary */}
+        <div className="support-card" style={{ flex: 1.2, padding: "20px 22px" }}>
+          <div className="section-heading" style={{ marginBottom: "14px" }}>
             <div>
-              <span className="section-eyebrow">ACADEMIC STATUS &amp; GUIDANCE</span>
-              <h3>{academicStanding.headline}</h3>
+              <span className="section-eyebrow">ACADEMIC STATUS &amp; STRATEGY</span>
+              <h3 style={{ margin: "4px 0 0", fontSize: "16px" }}>{academicStanding.headline || "Academic Trajectory"}</h3>
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 800,
-                  padding: "4px 10px",
-                  borderRadius: "12px",
-                  background:
-                    academicStanding.badgeTone === "warning"
-                      ? "rgba(255,209,102,0.15)"
-                      : academicStanding.badgeTone === "danger"
-                      ? "rgba(231,111,111,0.15)"
-                      : "rgba(6,214,160,0.12)",
-                  color:
-                    academicStanding.badgeTone === "warning"
-                      ? "#ffd166"
-                      : academicStanding.badgeTone === "danger"
-                      ? "var(--danger, #e76f6f)"
-                      : "var(--primary)",
-                  border:
-                    academicStanding.badgeTone === "warning"
-                      ? "1px solid rgba(255,209,102,0.3)"
-                      : academicStanding.badgeTone === "danger"
-                      ? "1px solid rgba(231,111,111,0.3)"
-                      : "1px solid rgba(6,214,160,0.25)",
-                }}
-              >
-                {academicStanding.badge}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.02)", borderRadius: "10px", margin: "12px 0" }}>
-            <p style={{ fontSize: "13px", color: "var(--text)", margin: "0 0 8px", lineHeight: "1.5", fontWeight: 500 }}>
-              {academicStanding.message}
-            </p>
-
-            <div style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "8px", marginTop: "8px" }}>
-              Current-semester attendance and assessment records are not yet available from the university portal. Academic overview is evaluated from official semester examination results.
-            </div>
-          </div>
-
-          <div className="support-footer">
-            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-              Synchronized with University Solutions Portal
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 800,
+                padding: "4px 10px",
+                borderRadius: "12px",
+                background: academicStanding.badgeTone === "warning" ? "rgba(255,209,102,0.15)" : academicStanding.badgeTone === "danger" ? "rgba(231,111,111,0.15)" : "rgba(6,214,160,0.12)",
+                color: academicStanding.badgeTone === "warning" ? "#ffd166" : academicStanding.badgeTone === "danger" ? "var(--danger, #e76f6f)" : "var(--primary)",
+                border: academicStanding.badgeTone === "warning" ? "1px solid rgba(255,209,102,0.3)" : academicStanding.badgeTone === "danger" ? "1px solid rgba(231,111,111,0.3)" : "1px solid rgba(6,214,160,0.25)",
+              }}
+            >
+              {academicStanding.badge || "ACTIVE"}
             </span>
-
-            <button onClick={() => navigate("/profile")}>
-              View Academic Record
-              <ArrowRight size={12} />
-            </button>
           </div>
+
+          <p style={{ fontSize: "13px", color: "var(--text)", margin: 0, lineHeight: "1.6", fontWeight: 500 }}>
+            {academicStanding.message}
+          </p>
         </div>
 
-        {/* Card B: Academic Outlook & Trajectory */}
-        <div className="recovery-card" style={{ flex: 1 }}>
-          <div className="section-heading">
+        {/* Right: Academic Velocity */}
+        <div className="recovery-card" style={{ flex: 1, padding: "20px 22px" }}>
+          <div className="section-heading" style={{ marginBottom: "14px" }}>
             <div>
-              <span className="section-eyebrow">ACADEMIC TRAJECTORY</span>
-              <h3>Progress Outlook</h3>
+              <span className="section-eyebrow">ACADEMIC VELOCITY</span>
+              <h3 style={{ margin: "4px 0 0", fontSize: "16px" }}>Performance Outlook</h3>
             </div>
-
-            <Sparkles size={17} className="section-ai-icon" />
+            <Sparkles size={18} style={{ color: "var(--primary)" }} />
           </div>
 
-          <div className="recovery-content">
-            <div className="recovery-circle">
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border)",
+              }}
+            >
               <div>
-                <strong style={{ fontSize: "20px" }}>
-                  {trend === "improving" ? "↗" : trend === "declining" ? "↘" : "→"}
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block" }}>
+                  MOMENTUM
+                </span>
+                <strong
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: 800,
+                    color: cgpa && cgpa >= 8.5 ? "var(--primary)" : "#ffd166",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginTop: "2px",
+                  }}
+                >
+                  <TrendingUp size={16} />
+                  {cgpa && cgpa >= 8.5 ? "Distinction Pace" : "Stable Progress"}
                 </strong>
-                <span>{trend.toUpperCase()}</span>
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block" }}>
+                  TARGET RETENTION
+                </span>
+                <strong style={{ fontSize: "14px", color: "var(--text)" }}>
+                  {cgpa ? `≥ ${(cgpa - 0.2).toFixed(1)} SGPA` : "—"}
+                </strong>
               </div>
             </div>
 
-            <div className="recovery-description">
-              <div className="recovery-status">
-                {academicStanding.badgeTone === "warning" || academicStanding.badgeTone === "danger" ? (
-                  <AlertTriangle size={15} style={{ color: "#ffd166" }} />
-                ) : (
-                  <CheckCircle2 size={15} style={{ color: "var(--primary)" }} />
-                )}
-                <strong>{academicStanding.outlookStatus}</strong>
-              </div>
-
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "6px 0 10px", lineHeight: "1.4" }}>
-                {academicStanding.outlookMessage}
-              </p>
-
-              <button onClick={() => navigate("/profile")}>
-                View Marks Card Breakdown
-                <ArrowRight size={13} />
-              </button>
-            </div>
+           
           </div>
         </div>
       </div>
 
-      {/* COMPLETE MARKS CARDS (SEMESTERS 1–4) */}
+      {/* SEMESTER EXAMINATION RECORDS & MARKS CARDS */}
       {data.historical_semesters && data.historical_semesters.length > 0 && (
         <section
           className="profile-card"
           style={{
-            marginTop: "24px",
             background: "rgba(255,255,255,0.02)",
             border: "1px solid var(--border)",
             borderRadius: "12px",
             overflow: "hidden",
+            marginBottom: "24px",
           }}
         >
           <div
             style={{
               padding: "16px 20px",
               borderBottom: "1px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "8px",
             }}
           >
-            <div>
-              <span className="dashboard-eyebrow">AUTHORITATIVE ACADEMIC RECORDS</span>
-              <h3 style={{ margin: "4px 0 0", fontSize: "16px", color: "var(--text)" }}>
-                Marks Card &amp; Semester Results
-              </h3>
-              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-muted)" }}>
-                Official subject-level breakdown from University Solutions Student Portal.
-              </p>
-            </div>
-
-            <button
-              onClick={() => navigate("/profile")}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--primary)",
-                cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              View Full Profile Records
-              <ArrowRight size={13} />
-            </button>
+            <span className="dashboard-eyebrow">ACADEMIC RECORDS</span>
+            <h3 style={{ margin: "4px 0 0", fontSize: "16px", color: "var(--text)" }}>
+              Marks Card &amp; Semester Results
+            </h3>
           </div>
 
           <div style={{ padding: "14px 18px" }}>
@@ -593,7 +358,6 @@ function Dashboard() {
                     background: isExpanded ? "rgba(255,255,255,0.02)" : "transparent",
                   }}
                 >
-                  {/* Clickable Semester Header */}
                   <div
                     onClick={() => setExpandedSemester((prev) => (prev === sem.semester ? null : sem.semester))}
                     style={{
@@ -660,7 +424,6 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Expanded Subject-Level Marks Card Table */}
                   {isExpanded && (
                     <div style={{ padding: "14px 16px", borderTop: "1px solid var(--border)" }}>
                       {subjs.length > 0 ? (
@@ -752,11 +515,11 @@ function Dashboard() {
       )}
 
       {/* QUICK ACTIONS */}
-      <div className="dashboard-bottom" style={{ marginTop: "24px" }}>
+      <div className="dashboard-bottom">
         <div className="dashboard-panel">
           <div className="panel-header">
             <div>
-              <span className="section-eyebrow">NEXT STEPS</span>
+              <span className="section-eyebrow">INTERVENTIONS &amp; RESOURCES</span>
               <h3>Quick actions</h3>
             </div>
           </div>
@@ -768,7 +531,18 @@ function Dashboard() {
               </div>
               <div>
                 <strong>Talk to AI Coach</strong>
-                <span>Get personalized guidance</span>
+                <span>Personalized study plans &amp; guidance</span>
+              </div>
+              <ArrowRight size={13} />
+            </button>
+
+            <button onClick={() => navigate("/progress")}>
+              <div className="quick-action-icon">
+                <Activity size={16} />
+              </div>
+              <div>
+                <strong>Detailed Attendance &amp; Progress</strong>
+                <span>Subject-wise breakdown &amp; 75% threshold monitor</span>
               </div>
               <ArrowRight size={13} />
             </button>
@@ -778,19 +552,8 @@ function Dashboard() {
                 <Target size={16} />
               </div>
               <div>
-                <strong>Review your goals</strong>
-                <span>Keep your academic targets on track</span>
-              </div>
-              <ArrowRight size={13} />
-            </button>
-
-            <button onClick={() => navigate("/profile")}>
-              <div className="quick-action-icon">
-                <FileText size={16} />
-              </div>
-              <div>
-                <strong>Marks Card & Academic Record</strong>
-                <span>Inspect semester results and grades</span>
+                <strong>Academic Target Tracker</strong>
+                <span>Keep your target SGPA on track</span>
               </div>
               <ArrowRight size={13} />
             </button>
