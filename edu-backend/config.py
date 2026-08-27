@@ -11,5 +11,6 @@ database_url = (
 secret_key = (
     os.getenv("secret_key")
     or os.getenv("SECRET_KEY")
-    or "eduguardian-dev-secret-key-2026"
+    or os.getenv("JWT_SECRET_KEY")
+    or "eduguardian-super-secret-key-2024"
 )

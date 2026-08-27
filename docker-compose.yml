@@ -177,6 +177,8 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-openai/gpt-oss-120b}
       STUDENT_CONTEXT_CACHE_TTL_SECONDS: ${STUDENT_CONTEXT_CACHE_TTL_SECONDS:-3600}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-eduguardian-super-secret-key-2024}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost,http://localhost:80,http://chatbot-ui:80"
     depends_on:
       db:
