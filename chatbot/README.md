@@ -1,4 +1,4 @@
-# EduGuardian AI 2.0 — Chatbot Component
+# EduGuardian AI — Chatbot Component
 ## Quick Start Guide
 
 ### Prerequisites

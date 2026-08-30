@@ -251,6 +251,20 @@ class ChatService:
 
         # 7. Build Response (strictly sanitize correct_answer so it never leaks)
         study_plan_schema = _plan_to_schema(plan_response) if new_plan_generated else None
+        if study_plan_schema:
+            try:
+                import urllib.request
+                sync_url = "http://edu-backend:5000/api/recovery/ai-sync"
+                req_data = json.dumps(study_plan_schema.model_dump(mode="json")).encode("utf-8")
+                req = urllib.request.Request(
+                    sync_url,
+                    data=req_data,
+                    headers={"Content-Type": "application/json", "X-Internal-Student-Id": str(student_id)}
+                )
+                urllib.request.urlopen(req, timeout=1.5)
+            except Exception as e:
+                logger.debug("Background edu-backend sync: %s", e)
+
         teaching_state_data = structured_payload.get("teaching_state") if structured_payload else None
         raw_quiz_data = structured_payload.get("quiz_state") if structured_payload else None
         quiz_state_data = dict(raw_quiz_data) if isinstance(raw_quiz_data, dict) else None
@@ -422,6 +436,20 @@ class ChatService:
                 await session.commit()
 
                 study_plan_schema = _plan_to_schema(plan_response) if new_plan_generated else None
+                if study_plan_schema:
+                    try:
+                        import urllib.request
+                        sync_url = "http://edu-backend:5000/api/recovery/ai-sync"
+                        req_data = json.dumps(study_plan_schema.model_dump(mode="json")).encode("utf-8")
+                        req = urllib.request.Request(
+                            sync_url,
+                            data=req_data,
+                            headers={"Content-Type": "application/json", "X-Internal-Student-Id": str(student_id)}
+                        )
+                        urllib.request.urlopen(req, timeout=1.5)
+                    except Exception as e:
+                        logger.debug("Background edu-backend sync in stream: %s", e)
+
                 teaching_state_data = structured_payload.get("teaching_state") if structured_payload else None
                 raw_quiz_data = structured_payload.get("quiz_state") if structured_payload else None
                 quiz_state_data = dict(raw_quiz_data) if isinstance(raw_quiz_data, dict) else None

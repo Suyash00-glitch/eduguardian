@@ -80,8 +80,8 @@ def evaluate_student_academic_guidance(hist_perf: Dict[str, Any]) -> Dict[str, A
             f"Consistent academic performance across {completed_sems} completed semesters with a clear record."
         )
 
-    # State 4: Strong & Consistent Performance (CGPA >= 7.5, stable trend, 0 backlogs)
-    elif cgpa_val is not None and cgpa_val >= 7.5 and trend == "stable" and backlogs == 0:
+    # State 4: Strong & Consistent Performance (CGPA >= 7.5 with 0 backlogs)
+    elif cgpa_val is not None and cgpa_val >= 7.5 and backlogs == 0:
         badge = "DISTINCTION STANDING" if cgpa_val >= 8.5 else "STRONG STANDING"
         headline = "Strong & Consistent Performance"
         state = "strong_consistent"

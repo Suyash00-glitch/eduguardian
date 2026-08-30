@@ -9,8 +9,15 @@ import {
   ChevronRight,
   Users,
   CalendarDays,
-  User,
+  Award,
+  Save,
+  MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  Clock3,
+  BookOpen,
 } from "lucide-react";
+import { getInitials } from "../../context/TeacherContext";
 
 export default function SubjectAssignmentDetails() {
   const { assignmentId } = useParams();
@@ -18,17 +25,16 @@ export default function SubjectAssignmentDetails() {
 
   const [assignment, setAssignment] = useState(null);
   const [students, setStudents] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [search, setSearch] = useState("");
-
   const [page, setPage] = useState(1);
   const pageSize = 10;
-
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Grading state per student: { [student_id]: { marks: string|number, feedback: string, saving: boolean, saved: boolean, error: string } }
+  const [gradeState, setGradeState] = useState({});
 
   useEffect(() => {
     async function loadAssignment() {
@@ -37,7 +43,6 @@ export default function SubjectAssignmentDetails() {
 
       try {
         const token = localStorage.getItem("token");
-
         const params = new URLSearchParams({
           page: String(page),
           page_size: String(pageSize),
@@ -54,15 +59,28 @@ export default function SubjectAssignmentDetails() {
         );
 
         const data = await res.json();
-
         if (!res.ok) {
           throw new Error(data.detail || "Failed to load assignment");
         }
 
         setAssignment(data.assignment);
-        setStudents(data.submissions?.students || []);
+        const studs = data.submissions?.students || [];
+        setStudents(studs);
         setTotal(data.submissions?.total || 0);
         setTotalPages(data.submissions?.total_pages || 1);
+
+        // Initialize gradeState
+        const initialGrades = {};
+        studs.forEach((s) => {
+          initialGrades[s.student_id] = {
+            marks: s.marks_obtained !== null && s.marks_obtained !== undefined ? s.marks_obtained : "",
+            feedback: s.feedback || "",
+            saving: false,
+            saved: false,
+            error: "",
+          };
+        });
+        setGradeState(initialGrades);
       } catch (err) {
         console.error("failed to load assignment:", err);
         setError(err.message || "Unable to load assignment");
@@ -79,9 +97,101 @@ export default function SubjectAssignmentDetails() {
     setPage(1);
   }
 
+  function handleGradeChange(studentId, field, value) {
+    setGradeState((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [field]: value,
+        saved: false,
+        error: "",
+      },
+    }));
+  }
+
+  async function handleSaveGrade(studentId) {
+    const studentGrades = gradeState[studentId];
+    if (!studentGrades) return;
+
+    const rawMarks = studentGrades.marks;
+    if (rawMarks === "" || rawMarks === null || rawMarks === undefined) {
+      setGradeState((prev) => ({
+        ...prev,
+        [studentId]: { ...prev[studentId], error: "Enter marks" },
+      }));
+      return;
+    }
+
+    const marksNum = parseFloat(rawMarks);
+    const maxMarks = assignment?.max_marks || 100;
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > maxMarks) {
+      setGradeState((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          error: `Between 0 & ${maxMarks}`,
+        },
+      }));
+      return;
+    }
+
+    try {
+      setGradeState((prev) => ({
+        ...prev,
+        [studentId]: { ...prev[studentId], saving: true, error: "" },
+      }));
+
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/assignments/grade", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assignment_id: parseInt(assignmentId, 10),
+          student_id: studentId,
+          marks_obtained: marksNum,
+          feedback: studentGrades.feedback || "",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to save grade");
+      }
+
+      setGradeState((prev) => ({
+        ...prev,
+        [studentId]: { ...prev[studentId], saving: false, saved: true, error: "" },
+      }));
+
+      // Update student in local list
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.student_id === studentId
+            ? { ...s, marks_obtained: marksNum, feedback: studentGrades.feedback, display_status: "graded" }
+            : s
+        )
+      );
+
+      setTimeout(() => {
+        setGradeState((prev) => ({
+          ...prev,
+          [studentId]: { ...prev[studentId], saved: false },
+        }));
+      }, 3000);
+    } catch (err) {
+      console.error("Failed to save grade:", err);
+      setGradeState((prev) => ({
+        ...prev,
+        [studentId]: { ...prev[studentId], saving: false, error: err.message },
+      }));
+    }
+  }
+
   function formatDate(date) {
     if (!date) return "—";
-
     return new Date(date).toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -91,7 +201,6 @@ export default function SubjectAssignmentDetails() {
 
   function formatDateTime(date) {
     if (!date) return "—";
-
     return new Date(date).toLocaleString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -103,381 +212,312 @@ export default function SubjectAssignmentDetails() {
 
   if (loading && !assignment) {
     return (
-      <div className="assignment-details-state">
-        <span>Loading assignment...</span>
+      <div className="ui-state">
+        <div className="loading-spinner" />
+        <span>Loading assignment details...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="assignment-details-state error">
+      <div className="ui-state" style={{ color: "var(--danger)" }}>
+        <AlertCircle size={24} />
         <span>{error}</span>
       </div>
     );
   }
 
-  if (!assignment) {
-    return null;
-  }
+  if (!assignment) return null;
+
+  const submittedCount = students.filter((s) => s.submission_id || s.marks_obtained !== null).length;
+  const gradedCount = students.filter((s) => s.marks_obtained !== null).length;
 
   return (
-    <div className="subject-page assignment-details-page">
-
-      {/* BACK */}
-
+    <div className="assignment-details-view">
+      {/* BREADCRUMB / BACK */}
       <button
         type="button"
-        className="assignment-back-button"
-        onClick={() => navigate(-1)}
+        className="assignment-back-nav"
+        onClick={() => navigate("/")}
       >
-        <ArrowLeft size={15} />
-        Back to Assignments
+        <ArrowLeft size={16} />
+        Back to Assignments Dashboard
       </button>
 
-      {/* PAGE HEADER */}
-
-      <div className="assignment-details-heading">
-        <div>
-          <span className="dashboard-eyebrow">
-            ASSIGNMENT DETAILS
-          </span>
-
-          <h2>{assignment.assignment_name}</h2>
-
-          <p>
-            {assignment.department}
-            <span> • </span>
-            Semester {assignment.semester}
-            <span> • </span>
-            Section {assignment.section}
-            <span> • </span>
-            <strong>
-              {assignment.subject_name || assignment.subject_code}
-            </strong>
+      {/* HERO HEADER CARD */}
+      <div className="assignment-hero-card">
+        <div className="assignment-hero-main">
+          <div className="assignment-hero-subject-chip">
+            <BookOpen size={13} />
+            {assignment.subject_name || assignment.subject_code}
+          </div>
+          <h1>{assignment.assignment_name}</h1>
+          <p className="assignment-hero-cohort">
+            {assignment.department} · Semester {assignment.semester} · Section {assignment.section} · Created on {formatDate(assignment.created_at)}
           </p>
+        </div>
+
+        <div className="assignment-hero-pills">
+          <div className="hero-pill marks">
+            <Award size={15} />
+            Max: {assignment.max_marks} Marks
+          </div>
+
+          <div className="hero-pill due">
+            <CalendarDays size={15} />
+            Due: {formatDate(assignment.due_date)}
+          </div>
+
+          {assignment.resource_url && (
+            <a
+              href={`http://localhost:5000${assignment.resource_url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hero-pill resource"
+            >
+              <Download size={14} />
+              {assignment.resource_name || "Question Paper"}
+            </a>
+          )}
         </div>
       </div>
 
-      {/* ASSIGNMENT INFORMATION */}
-
-      <section className="assignment-info-card">
-
-        <div className="assignment-card-heading">
-          <div className="assignment-heading-icon">
-            <FileText size={19} />
+      {/* METRIC ROW */}
+      <div className="faculty-metrics-grid" style={{ marginBottom: "20px" }}>
+        <div className="faculty-metric-card">
+          <div className="faculty-metric-icon-box">
+            <Users size={22} />
           </div>
-
-          <h3>Assignment Information</h3>
+          <div className="faculty-metric-data">
+            <span>Enrolled Students</span>
+            <strong>{total} Students</strong>
+          </div>
         </div>
 
-        <div className="assignment-info-grid">
-
-          <div className="assignment-info-item">
-            <span>ASSIGNMENT NAME</span>
-            <strong>{assignment.assignment_name}</strong>
+        <div className="faculty-metric-card">
+          <div className="faculty-metric-icon-box">
+            <CheckCircle2 size={22} />
           </div>
-
-          <div className="assignment-info-item">
-            <span>MAX MARKS</span>
-            <strong>{assignment.max_marks}</strong>
+          <div className="faculty-metric-data">
+            <span>Submissions Received</span>
+            <strong>{submittedCount} / {total} ({total > 0 ? Math.round((submittedCount / total) * 100) : 0}%)</strong>
           </div>
-
-          <div className="assignment-info-item">
-            <span>CLASS</span>
-            <strong>
-              {assignment.department} · Semester{" "}
-              {assignment.semester} · Section {assignment.section}
-            </strong>
-          </div>
-
-          <div className="assignment-info-item">
-            <span>CREATED BY</span>
-            <strong>
-              <User size={15} />
-              Teacher
-            </strong>
-          </div>
-
-          <div className="assignment-info-item">
-            <span>SUBJECT</span>
-            <strong>
-              {assignment.subject_name || assignment.subject_code}
-            </strong>
-          </div>
-
-          <div className="assignment-info-item">
-            <span>DUE DATE</span>
-            <strong>
-              <CalendarDays size={15} />
-              {formatDate(assignment.due_date)}
-            </strong>
-          </div>
-
-          <div className="assignment-info-item">
-            <span>CREATED ON</span>
-            <strong>
-              {formatDateTime(assignment.created_at)}
-            </strong>
-          </div>
-
-          <div className="assignment-info-item">
-            <span>RESOURCE</span>
-
-            {assignment.resource_url ? (
-              <div className="assignment-resource-content">
-
-                <a
-                  href={`http://localhost:5000${assignment.resource_url}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="assignment-resource-name"
-                >
-                  <FileText size={15} />
-                  {assignment.resource_name || "Assignment Resource"}
-                </a>
-
-                <a
-                  href={`http://localhost:5000${assignment.resource_url}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="assignment-resource-download"
-                >
-                  <Download size={14} />
-                  View / Download
-                </a>
-
-              </div>
-            ) : (
-              <strong className="no-resource">
-                No resource uploaded
-              </strong>
-            )}
-          </div>
-
-        </div>
-      </section>
-
-      {/* STUDENT SUBMISSIONS */}
-
-      <section className="submission-card">
-
-        <div className="submission-card-top">
-
-          <div className="submission-heading">
-
-            <div className="submission-heading-icon">
-              <Users size={19} />
-            </div>
-
-            <div>
-              <h3>Student Submissions</h3>
-
-              <span>
-                {total} students in this class
-              </span>
-            </div>
-
-          </div>
-
-          <div className="submission-controls">
-
-            <div className="submission-search">
-              <Search size={15} />
-
-              <input
-                type="text"
-                placeholder="Search by name or USN..."
-                value={search}
-                onChange={handleSearch}
-              />
-            </div>
-
-            <div className="page-size-box">
-              10 per page
-            </div>
-
-          </div>
-
         </div>
 
-        {/* TABLE */}
+        <div className="faculty-metric-card">
+          <div className="faculty-metric-icon-box">
+            <Award size={22} />
+          </div>
+          <div className="faculty-metric-data">
+            <span>Evaluated & Graded</span>
+            <strong>{gradedCount} / {total} Graded</strong>
+          </div>
+        </div>
 
-        <div className="submission-table-wrapper">
+        <div className="faculty-metric-card">
+          <div className="faculty-metric-icon-box">
+            <Clock3 size={22} />
+          </div>
+          <div className="faculty-metric-data">
+            <span>Awaiting Evaluation</span>
+            <strong>{Math.max(0, submittedCount - gradedCount)} Pending</strong>
+          </div>
+        </div>
+      </div>
 
-          <div className="submission-table">
+      {/* STUDENT SUBMISSIONS & GRADING TABLE */}
+      <div className="teacher-panel" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="assignment-roster-header-bar">
+          <div className="assignment-roster-title-group">
+            <h3>Student Submissions & Inline Evaluation</h3>
+            <span>Enter student scores and optional feedback below, then click Grade.</span>
+          </div>
 
-            <div className="submission-table-header">
-              <span>USN</span>
-              <span>STUDENT NAME</span>
-              <span>STATUS</span>
-              <span>SUBMISSION DATE</span>
-              <span>MARKS</span>
-              <span>FILE</span>
-              <span></span>
-            </div>
+          <div className="assignment-roster-search">
+            <Search size={15} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Search student or USN..."
+              value={search}
+              onChange={handleSearch}
+            />
+          </div>
+        </div>
 
-            {students.length === 0 ? (
+        <div style={{ overflowX: "auto" }}>
+          <table className="student-grading-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>USN</th>
+                <th>Status</th>
+                <th>Submitted File</th>
+                <th style={{ width: "130px" }}>Score (/{assignment.max_marks})</th>
+                <th>Faculty Feedback</th>
+                <th style={{ width: "110px", textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: "36px", textAlign: "center", color: "var(--text-muted)" }}>
+                    No students match your search filter.
+                  </td>
+                </tr>
+              ) : (
+                students.map((student) => {
+                  const hasFile = Boolean(student.file_url || student.submission_file_url);
+                  const fileUrl = student.file_url || student.submission_file_url;
+                  const fileName = student.file_name || student.submission_file_name;
+                  const stGrades = gradeState[student.student_id] || { marks: "", feedback: "", saving: false, saved: false, error: "" };
+                  const isGraded = student.marks_obtained !== null && student.marks_obtained !== undefined;
+                  const initials = getInitials(student.name);
 
-              <div className="submission-empty">
-                <Users size={28} />
+                  return (
+                    <tr key={student.student_id}>
+                      <td>
+                        <div className="student-profile-cell">
+                          <div className="student-initials-avatar">
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="student-name-text">{student.name}</div>
+                            {student.submission_date && (
+                              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "1px" }}>
+                                {formatDateTime(student.submission_date)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
-                <strong>No students found</strong>
+                      <td>
+                        <span className="student-usn-badge">{student.usn}</span>
+                      </td>
 
-                <span>
-                  No students match your search.
-                </span>
-              </div>
-
-            ) : (
-
-              students.map((student) => {
-
-                const submitted = Boolean(
-                  student.submission_id
-                );
-
-                return (
-                  <div
-                    className="submission-table-row"
-                    key={student.student_id}
-                  >
-
-                    <span className="student-usn">
-                      {student.usn}
-                    </span>
-
-                    <span className="student-name">
-                      {student.name}
-                    </span>
-
-                    <span>
-
-                      <span
-                        className={
-                          submitted
-                            ? "submission-status submitted"
-                            : "submission-status pending"
-                        }
-                      >
-                        {submitted ? (
-                          <>
-                            <span className="status-dot">✓</span>
+                      <td>
+                        {isGraded ? (
+                          <span className="attendance-pill present" style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px" }}>
+                            <Award size={12} style={{ marginRight: "3px", verticalAlign: "-1px" }} />
+                            Graded
+                          </span>
+                        ) : hasFile ? (
+                          <span className="attendance-pill present" style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px" }}>
+                            <CheckCircle2 size={12} style={{ marginRight: "3px", verticalAlign: "-1px" }} />
                             Submitted
-                          </>
+                          </span>
                         ) : (
-                          <>
-                            <span className="status-dot">×</span>
-                            Not submitted
-                          </>
+                          <span className="attendance-pill absent" style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px" }}>
+                            Pending
+                          </span>
                         )}
-                      </span>
+                      </td>
 
-                    </span>
+                      <td>
+                        {hasFile ? (
+                          <a
+                            href={`http://localhost:5000${fileUrl}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="submission-file-chip"
+                          >
+                            <FileText size={13} />
+                            <span style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {fileName || "Download Work"}
+                            </span>
+                            <Download size={12} />
+                          </a>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>—</span>
+                        )}
+                      </td>
 
-                    <span className="submission-date">
-                      {submitted
-                        ? formatDateTime(
-                            student.submission_date
-                          )
-                        : "—"}
-                    </span>
+                      <td>
+                        <div className="grade-input-wrapper">
+                          <input
+                            type="number"
+                            min="0"
+                            max={assignment.max_marks}
+                            step="0.5"
+                            placeholder="Marks"
+                            className="grade-number-input"
+                            value={stGrades.marks}
+                            onChange={(e) => handleGradeChange(student.student_id, "marks", e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveGrade(student.student_id);
+                            }}
+                          />
+                        </div>
+                        {stGrades.error && (
+                          <div style={{ color: "var(--danger)", fontSize: "10px", marginTop: "2px" }}>
+                            {stGrades.error}
+                          </div>
+                        )}
+                      </td>
 
-                    <span className="submission-marks">
-                      {student.marks_obtained !== null &&
-                      student.marks_obtained !== undefined
-                        ? `${student.marks_obtained}/${assignment.max_marks}`
-                        : "—"}
-                    </span>
+                      <td>
+                        <input
+                          type="text"
+                          placeholder="Optional feedback comment..."
+                          className="grade-feedback-input"
+                          value={stGrades.feedback}
+                          onChange={(e) => handleGradeChange(student.student_id, "feedback", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveGrade(student.student_id);
+                          }}
+                        />
+                      </td>
 
-                    <span className="submission-file">
-
-                      {student.submission_file_url ? (
-                        <a
-                          href={`http://localhost:5000${student.submission_file_url}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Download submission"
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          type="button"
+                          className={`save-grade-action-btn ${stGrades.saved ? "saved" : ""}`}
+                          disabled={stGrades.saving}
+                          onClick={() => handleSaveGrade(student.student_id)}
                         >
-                          <FileText size={15} />
-                          {student.submission_file_name ||
-                            "View file"}
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-
-                    </span>
-
-                    <span className="submission-download">
-
-                      {student.submission_file_url && (
-                        <a
-                          href={`http://localhost:5000${student.submission_file_url}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Download"
-                        >
-                          <Download size={15} />
-                        </a>
-                      )}
-
-                    </span>
-
-                  </div>
-                );
-              })
-            )}
-
-          </div>
-
+                          <Save size={12} />
+                          {stGrades.saving ? "Saving..." : stGrades.saved ? "Saved ✓" : "Grade"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
         {/* PAGINATION */}
-
-        <div className="submission-pagination">
-
+        <div style={{ padding: "14px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: "6px" }}>
           <button
+            className="flagged-view-button"
             disabled={page <= 1}
-            onClick={() =>
-              setPage((p) => Math.max(1, p - 1))
-            }
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={15} />
           </button>
 
-          {Array.from(
-            { length: totalPages },
-            (_, index) => index + 1
-          ).map((pageNumber) => (
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => (
             <button
-              key={pageNumber}
-              className={
-                page === pageNumber
-                  ? "active"
-                  : ""
-              }
-              onClick={() => setPage(pageNumber)}
+              key={pNum}
+              className={`flagged-view-button ${page === pNum ? "active" : ""}`}
+              style={page === pNum ? { background: "var(--primary)", color: "#0d131f" } : {}}
+              onClick={() => setPage(pNum)}
             >
-              {pageNumber}
+              {pNum}
             </button>
           ))}
 
           <button
+            className="flagged-view-button"
             disabled={page >= totalPages}
-            onClick={() =>
-              setPage((p) =>
-                Math.min(totalPages, p + 1)
-              )
-            }
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={15} />
           </button>
-
         </div>
-
-      </section>
-
+      </div>
     </div>
   );
 }

@@ -72,7 +72,6 @@ export default function MyMentees() {
   return (
     <div className="mentees-page">
       <div className="mentees-header" style={{ marginBottom: "20px" }}>
-        <span className="dashboard-eyebrow">FACULTY MENTORSHIP</span>
         <h2>My Mentees</h2>
         <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", marginTop: "4px" }}>
           Students currently assigned to you for 1-on-1 academic mentoring and intervention.
@@ -116,8 +115,8 @@ export default function MyMentees() {
                       justifyContent: "space-between",
                       alignItems: "center",
                       padding: "12px 14px",
-                      background: isSelected ? "rgba(99, 102, 241, 0.15)" : "rgba(255, 255, 255, 0.02)",
-                      border: `1px solid ${isSelected ? "rgba(99, 102, 241, 0.4)" : "rgba(255, 255, 255, 0.06)"}`,
+                      background: isSelected ? "var(--primary-soft)" : "rgba(255, 255, 255, 0.02)",
+                      border: `1px solid ${isSelected ? "var(--primary)" : "var(--border)"}`,
                       borderRadius: "8px",
                       cursor: "pointer",
                       textAlign: "left"
@@ -154,8 +153,7 @@ export default function MyMentees() {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
                   <div>
-                    <span className="dashboard-eyebrow">MENTEE PROFILE &amp; ACADEMIC RECORD</span>
-                    <h3 style={{ fontSize: "20px", fontWeight: 700, color: "#fff", margin: "4px 0" }}>
+                    <h3 style={{ fontSize: "20px", fontWeight: 700, color: "#fff", margin: "0 0 4px" }}>
                       {selected.name}
                     </h3>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
@@ -205,8 +203,8 @@ export default function MyMentees() {
                 {/* REASON / SUPPORT SIGNAL */}
                 {selected.reason && (
                   <div style={{
-                    background: "rgba(99, 102, 241, 0.08)",
-                    border: "1px solid rgba(99, 102, 241, 0.25)",
+                    background: "rgba(6, 214, 160, 0.08)",
+                    border: "1px solid rgba(6, 214, 160, 0.25)",
                     borderRadius: "8px",
                     padding: "14px",
                     marginBottom: "20px",
@@ -214,12 +212,12 @@ export default function MyMentees() {
                     gap: "10px",
                     alignItems: "flex-start"
                   }}>
-                    <ClipboardList size={16} color="#a5b4fc" style={{ marginTop: "2px", flexShrink: 0 }} />
+                    <ClipboardList size={16} color="var(--primary)" style={{ marginTop: "2px", flexShrink: 0 }} />
                     <div>
-                      <strong style={{ fontSize: "12px", color: "#a5b4fc", display: "block", marginBottom: "4px" }}>
+                      <strong style={{ fontSize: "12px", color: "var(--primary)", display: "block", marginBottom: "4px" }}>
                         Mentorship Signal &amp; Focus Area
                       </strong>
-                      <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", margin: 0 }}>
+                      <p style={{ fontSize: "12px", color: "var(--text)", margin: 0 }}>
                         {selected.reason}
                       </p>
                     </div>

@@ -7,6 +7,7 @@ from routes.resource import router as resource_router
 from routes.assignment import router as assignment_router
 from routes.teacherAssignment import router as teacher_assignment_router
 from routes.mentor import router as mentor_router
+from routes.goal import router as goal_router
 from fastapi.staticfiles import StaticFiles
 from routes.dashboard import router as dashboard_router
 
@@ -47,6 +48,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routes.feedback import router as feedback_router
+from routes.attendance import router as attendance_router
+from routes.recovery import router as recovery_router
+
 # Standard REST API routes
 app.include_router(auth_router)
 app.include_router(student_router)
@@ -56,6 +61,10 @@ app.include_router(assignment_router)
 app.include_router(teacher_assignment_router)
 app.include_router(mentor_router)
 app.include_router(dashboard_router)
+app.include_router(goal_router)
+app.include_router(feedback_router)
+app.include_router(attendance_router)
+app.include_router(recovery_router)
 
 
 

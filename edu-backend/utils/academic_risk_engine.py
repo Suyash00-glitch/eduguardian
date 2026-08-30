@@ -1,27 +1,121 @@
 """
-EduGuardian Academic Risk Calculation Framework
-================================================
-Implements the multi-signal academic risk engine with:
-- Dynamic available-weight normalization across current semester indicators (attendance, quiz, assignments, LMS)
-- Deep historical academic performance evaluation (CGPA, SGPA, trajectory/trend, backlogs/arrears, subject-level marks card)
-- Explicit early-semester handling: when current attendance/assessments are pending faculty upload, evaluates historical academic standing with calibrated confidence ("low" / "partial")
-- Plain-language explainability and SHAP-like feature contributions
+EduGuardian Predictive Academic Risk Engine
+============================================
+Implements a multi-horizon predictive academic risk framework combining:
+1. Deep Historical Marksheet Intelligence (40% foundation weight when live data present, 100% early-semester):
+   - Cumulative CGPA standing and academic band
+   - Multi-semester SGPA velocity and trajectory slope
+   - Active backlogs and historical cleared arrears (conceptual struggle patterns)
+   - Subject-level low grade density (borderline passes D/E/P)
+2. Live Current-Semester Signals (60% velocity weight):
+   - Real-time Attendance % (critical leading indicator against the university 75% cutoff)
+   - Continuous internal evaluation / quiz performance
+   - Assignment submission regularity and LMS engagement
+3. Cross-Feature Interaction & Predictive Alerting:
+   - High historical vulnerability + borderline attendance triggers proactive risk escalation
+   - Explainable risk attribution factors and calibrated recovery probability
 """
 
 from typing import Dict, Any, List, Optional
 
+
 CURRENT_SIGNAL_WEIGHTS = {
-    "attendance": 0.35,
+    "attendance": 0.40,
     "quiz": 0.30,
-    "assignments": 0.20,
+    "assignments": 0.15,
     "lms": 0.15
 }
 
 
+def _evaluate_historical_foundation(
+    cgpa: Optional[float],
+    latest_sgpa: Optional[float],
+    sgpa_trend: str,
+    arrears_count: int,
+    cleared_backlogs: list,
+    hist_semesters: list
+) -> Dict[str, Any]:
+    """
+    Analyzes historical marksheets across all prior semesters to compute
+    the student's foundational academic resilience score (0 = no risk, 100 = critical risk).
+    """
+    hist_factors: List[str] = []
+    base_score = 15.0
+
+    # 1. CGPA Cumulative Standing Evaluation
+    eval_cgpa = cgpa if cgpa is not None else (latest_sgpa if latest_sgpa is not None else 7.5)
+
+    if eval_cgpa >= 8.5:
+        base_score = 8.0
+        hist_factors.append(f"Distinction cumulative standing (CGPA: {eval_cgpa:.2f})")
+    elif eval_cgpa >= 7.5:
+        base_score = 16.0
+        hist_factors.append(f"First-class academic standing (CGPA: {eval_cgpa:.2f})")
+    elif eval_cgpa >= 6.5:
+        base_score = 32.0
+        hist_factors.append(f"Consistent cumulative standing (CGPA: {eval_cgpa:.2f})")
+    elif eval_cgpa >= 5.5:
+        base_score = 52.0
+        hist_factors.append(f"Moderate cumulative standing (CGPA: {eval_cgpa:.2f}) — subject strengthening advised")
+    else:
+        base_score = 74.0
+        hist_factors.append(f"Low cumulative foundation (CGPA: {eval_cgpa:.2f}) — high foundational vulnerability")
+
+    # 2. SGPA Multi-Semester Trajectory
+    if latest_sgpa is not None:
+        hist_factors.append(f"Latest completed semester SGPA: {latest_sgpa:.2f}")
+
+    if sgpa_trend == "improving":
+        base_score = max(5.0, base_score - 8.0)
+        hist_factors.append("Positive SGPA recovery trajectory across recent terms")
+    elif sgpa_trend == "declining":
+        base_score = min(92.0, base_score + 14.0)
+        hist_factors.append("Declining SGPA trajectory across consecutive semesters")
+
+    # 3. Active Backlogs & Arrears
+    if arrears_count > 0:
+        base_score = min(96.0, base_score + (arrears_count * 18.0))
+        hist_factors.append(f"{arrears_count} active uncleared backlog/arrear(s)")
+
+    # 4. Cleared Historical Backlogs (Summer / Supplementary sessions)
+    cleared_count = len(cleared_backlogs) if isinstance(cleared_backlogs, list) else 0
+    if cleared_count > 0:
+        # Prior failures, even if cleared, indicate foundational vulnerability in technical prerequisites
+        cleared_penalty = min(22.0, cleared_count * 5.5)
+        base_score = min(90.0, base_score + cleared_penalty)
+        hist_factors.append(
+            f"{cleared_count} prior subject failure(s) cleared in Summer/Supplementary exams"
+        )
+
+    # 5. Deep Marksheet Inspection: Low-grade density (D / E / P / GP <= 5.0)
+    low_grade_count = 0
+    for sem in hist_semesters:
+        if isinstance(sem, dict):
+            for sub in sem.get("subject_results", []):
+                if isinstance(sub, dict):
+                    gp = sub.get("grade_point")
+                    grade = str(sub.get("grade") or "").upper()
+                    if (gp is not None and 0 < gp <= 5.0) or grade in ("D", "E", "P", "PASS"):
+                        low_grade_count += 1
+
+    if low_grade_count >= 4:
+        base_score = min(92.0, base_score + 8.0)
+        hist_factors.append(f"{low_grade_count} historical borderline pass grades (Grade Point ≤ 5.0)")
+
+    return {
+        "foundation_risk_score": float(round(base_score, 1)),
+        "eval_cgpa": eval_cgpa,
+        "arrears_count": arrears_count,
+        "cleared_count": cleared_count,
+        "low_grade_count": low_grade_count,
+        "factors": hist_factors
+    }
+
+
 def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Computes explainable academic risk and recovery probability from a normalized StudentContext.
-    Combines current-term signals (when available) with historical academic performance.
+    Computes predictive, explainable academic risk and recovery probability.
+    Synthesizes historical marksheet foundation with current live signals.
     """
     available_signals: List[str] = []
     missing_signals: List[str] = []
@@ -62,7 +156,7 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
     else:
         missing_signals.append("lms")
 
-    # ── 5. Inspect Historical Academic Performance & Marks Card ──────────
+    # ── 5. Inspect Historical Academic Performance & Marksheets ──────────
     hist_perf = student_context.get("historical_academic_performance", {})
     hist_semesters = student_context.get("historical_semesters", [])
 
@@ -70,7 +164,7 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
     latest_sgpa: Optional[float] = hist_perf.get("latest_sgpa")
     sgpa_trend: str = hist_perf.get("sgpa_trend", "insufficient_data")
     arrears_count: int = int(hist_perf.get("arrears_count", 0))
-    failed_history: list = hist_perf.get("failed_subjects_history", [])
+    cleared_backlogs: list = hist_perf.get("cleared_backlogs", [])
     total_sems_completed: int = int(hist_perf.get("total_semesters_completed", len(hist_semesters)))
 
     # Fallback to scan historical_semesters if hist_perf was empty
@@ -87,70 +181,42 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
 
     has_historical = (cgpa is not None or latest_sgpa is not None or len(hist_semesters) > 0)
 
-    # ── SCENARIO A: EARLY SEMESTER / CURRENT METRICS PENDING ───────────────
-    # If no current-semester metrics exist (attendance/assessments pending faculty upload)
+    # Compute Historical Foundation Metrics
+    hist_eval = _evaluate_historical_foundation(
+        cgpa=cgpa,
+        latest_sgpa=latest_sgpa,
+        sgpa_trend=sgpa_trend,
+        arrears_count=arrears_count,
+        cleared_backlogs=cleared_backlogs,
+        hist_semesters=hist_semesters
+    )
+    hist_foundation_score = hist_eval["foundation_risk_score"]
+    hist_factors = hist_eval["factors"]
+
+    # ── SCENARIO A: EARLY SEMESTER / LIVE SIGNALS NOT YET UPLOADED ────────
     if len(available_signals) == 0:
         if has_historical:
-            # Derive explainable risk score from historical academic evidence
-            hist_risk_score = 15.0  # default baseline
-            hist_factors: List[str] = []
-
-            # CGPA / Standing Evaluation
-            eval_cgpa = cgpa if cgpa is not None else (latest_sgpa if latest_sgpa is not None else 7.5)
-
-            if eval_cgpa >= 8.5:
-                hist_risk_score = 8.0
-                hist_factors.append(f"Distinction cumulative standing (CGPA: {eval_cgpa:.2f})")
-            elif eval_cgpa >= 7.5:
-                hist_risk_score = 15.0
-                hist_factors.append(f"Strong academic performance (CGPA: {eval_cgpa:.2f})")
-            elif eval_cgpa >= 6.5:
-                hist_risk_score = 30.0
-                hist_factors.append(f"Consistent academic performance (CGPA: {eval_cgpa:.2f})")
-            elif eval_cgpa >= 5.5:
-                hist_risk_score = 48.0
-                hist_factors.append(f"Moderate cumulative performance (CGPA: {eval_cgpa:.2f})")
-            else:
-                hist_risk_score = 72.0
-                hist_factors.append(f"Low cumulative academic performance (CGPA: {eval_cgpa:.2f})")
-
-            # SGPA Trajectory / Trend
-            if latest_sgpa is not None:
-                hist_factors.append(f"Latest semester SGPA: {latest_sgpa:.2f}")
-
-            if sgpa_trend == "improving":
-                hist_risk_score = max(5.0, hist_risk_score - 8.0)
-                hist_factors.append("Improving semester performance trajectory")
-            elif sgpa_trend == "declining":
-                hist_risk_score = min(90.0, hist_risk_score + 14.0)
-                hist_factors.append("Declining SGPA trajectory in recent semesters")
-
-            # Arrears / Backlogs check
-            if arrears_count > 0:
-                hist_risk_score = min(95.0, hist_risk_score + (arrears_count * 20.0))
-                hist_factors.append(f"{arrears_count} historical backlog/arrear record(s) detected")
-
-            # Classification
-            if hist_risk_score >= 60.0 or arrears_count >= 2:
+            # Calibrate risk classification from historical marksheet foundation
+            if hist_foundation_score >= 60.0 or arrears_count >= 2:
                 risk_level = "high"
-                recovery_prob = max(35.0, round(100.0 - hist_risk_score, 1))
-            elif hist_risk_score >= 35.0 or arrears_count == 1:
+                recovery_prob = max(35.0, round(100.0 - hist_foundation_score, 1))
+            elif hist_foundation_score >= 35.0 or arrears_count == 1 or len(cleared_backlogs) >= 2:
                 risk_level = "medium"
-                recovery_prob = max(60.0, min(80.0, round(100.0 - hist_risk_score, 1)))
+                recovery_prob = max(58.0, min(80.0, round(100.0 - hist_foundation_score, 1)))
             else:
                 risk_level = "low"
-                recovery_prob = max(84.0, min(96.0, round(100.0 - hist_risk_score, 1)))
+                recovery_prob = max(84.0, min(96.0, round(100.0 - hist_foundation_score, 1)))
 
             support_summary = (
-                f"Current-semester attendance and assessment records are not yet available; "
-                f"evaluated based on historical academic performance ({'; '.join(hist_factors)})."
+                f"Predictive baseline evaluated from historical marksheets: {'; '.join(hist_factors)}. "
+                f"Current semester attendance and internal evaluations are pending."
             )
 
             return {
                 "risk_level": risk_level,
-                "risk_score": float(round(hist_risk_score, 1)),
+                "risk_score": float(round(hist_foundation_score, 1)),
                 "confidence": "low",
-                "risk_basis": "historical_academic_performance",
+                "risk_basis": "historical_marksheets_foundation",
                 "factors": hist_factors,
                 "risk_status": "evaluated_historical",
                 "recovery_probability": float(recovery_prob),
@@ -166,12 +232,13 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
                     "latest_sgpa": latest_sgpa,
                     "sgpa_trend": sgpa_trend,
                     "arrears_count": arrears_count,
+                    "cleared_backlogs_count": len(cleared_backlogs),
                     "total_semesters_completed": total_sems_completed,
                     "factors": hist_factors
                 },
                 "shap_explanation": {
-                    "cgpa_contribution": round((eval_cgpa - 7.0) * 5.0, 2),
-                    "trend_contribution": 5.0 if sgpa_trend == "improving" else (-5.0 if sgpa_trend == "declining" else 0.0),
+                    "cgpa_contribution": round((hist_eval["eval_cgpa"] - 7.0) * 5.0, 2),
+                    "cleared_arrears_contribution": round(len(cleared_backlogs) * 4.0, 2),
                     "signals_pending": missing_signals
                 }
             }
@@ -185,7 +252,7 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
             "factors": ["Current semester academic metrics and historical records are pending"],
             "risk_status": "insufficient_data",
             "recovery_probability": 85.0,
-            "support_signal": "Current semester academic metrics and historical records are pending faculty/portal upload. Academic profile is active.",
+            "support_signal": "Academic profile is active. Historical records and live attendance pending.",
             "attendance_change": 0.0,
             "lms_activity_change": 0.0,
             "missed_assignments": 0,
@@ -198,115 +265,139 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
 
-    # ── SCENARIO B: CURRENT SIGNALS AVAILABLE ──────────────────────────────
+    # ── SCENARIO B: LIVE SIGNALS AVAILABLE (PREDICTIVE SYNTHESIS) ─────────
+    # 1. Compute Live Signals Velocity Score
     available_weight_sum = sum(CURRENT_SIGNAL_WEIGHTS[s] for s in available_signals)
     normalized_weights = {
         s: round(CURRENT_SIGNAL_WEIGHTS[s] / available_weight_sum, 4)
         for s in available_signals
     }
 
-    if len(available_signals) == 4:
-        confidence = "full"
-    elif len(available_signals) >= 2:
-        confidence = "partial"
-    else:
-        confidence = "low"
-
     signal_risks: Dict[str, float] = {}
-    factors: List[str] = []
+    live_factors: List[str] = []
 
-    # Current Attendance
+    # Current Attendance Risk (Institutional 75% Threshold Alignment)
     if attendance_val is not None:
         if attendance_val < 65.0:
-            att_risk = 90.0
-            factors.append(f"Attendance ({attendance_val:.1f}%) is below 65% minimum requirement")
-        elif attendance_val < 80.0:
-            att_risk = 50.0
-            factors.append(f"Attendance ({attendance_val:.1f}%) is in monitoring band (65-79%)")
+            att_risk = 92.0
+            live_factors.append(f"Critical attendance shortage ({attendance_val:.1f}%) — severe detention risk (<65%)")
+        elif attendance_val < 75.0:
+            att_risk = 76.0
+            live_factors.append(f"Attendance ({attendance_val:.1f}%) is below mandatory university 75% cutoff")
+        elif attendance_val < 85.0:
+            att_risk = 42.0
+            live_factors.append(f"Attendance ({attendance_val:.1f}%) is in monitoring band (75–84%)")
         else:
             att_risk = 10.0
+            live_factors.append(f"Healthy attendance standing ({attendance_val:.1f}%)")
         signal_risks["attendance"] = att_risk
 
-    # Current Quiz / Assessment
+    # Current Quiz / Assessments Risk
     if quiz_val is not None:
-        if quiz_val < 50.0:
-            quiz_risk = 85.0
-            factors.append(f"Assessment average ({quiz_val:.1f}%) is below 50%")
-        elif quiz_val < 75.0:
-            quiz_risk = 45.0
-            factors.append(f"Assessment average ({quiz_val:.1f}%) is in moderate band (50-74%)")
+        if quiz_val < 45.0:
+            quiz_risk = 88.0
+            live_factors.append(f"Current internal assessment average ({quiz_val:.1f}%) is below passing standard (45%)")
+        elif quiz_val < 65.0:
+            quiz_risk = 48.0
+            live_factors.append(f"Current internal assessment average ({quiz_val:.1f}%) is moderate (45–64%)")
         else:
             quiz_risk = 10.0
         signal_risks["quiz"] = quiz_risk
 
-    # Current Assignments
+    # Current Assignments Risk
     if missed_assignments is not None:
         if missed_assignments >= 2:
             asgn_risk = 85.0
-            factors.append(f"{missed_assignments} overdue/missed assignments")
+            live_factors.append(f"{missed_assignments} overdue/missed assignments recorded")
         elif missed_assignments == 1:
             asgn_risk = 45.0
-            factors.append("1 missed assignment recorded")
+            live_factors.append("1 missed assignment recorded")
         else:
             asgn_risk = 10.0
         signal_risks["assignments"] = asgn_risk
 
-    # Current LMS
+    # Current LMS Engagement Risk
     if lms_val is not None:
         if lms_val < 40.0:
             lms_risk = 75.0
-            factors.append("LMS engagement is below recommended threshold")
+            live_factors.append("LMS digital engagement is below recommended active threshold")
         elif lms_val < 70.0:
             lms_risk = 40.0
         else:
             lms_risk = 10.0
         signal_risks["lms"] = lms_risk
 
-    # Weighted Risk Index from current signals
-    composite_risk_score = sum(
+    # Weighted Live Score
+    live_signals_score = sum(
         signal_risks[s] * normalized_weights[s]
         for s in available_signals
     )
 
-    # Contextual adjustment from historical performance if available
-    risk_basis = "current_semester_signals"
-    if has_historical and cgpa is not None:
-        risk_basis = "current_and_historical"
-        if cgpa >= 8.5:
-            composite_risk_score = max(5.0, composite_risk_score - 8.0)
-            factors.append(f"Historical distinction standing (CGPA: {cgpa:.2f})")
-        elif cgpa < 6.0:
-            composite_risk_score = min(95.0, composite_risk_score + 10.0)
-            factors.append(f"Historical low cumulative standing (CGPA: {cgpa:.2f})")
+    # 2. Predictive Multi-Horizon Fusion (Historical Foundation + Live Velocity)
+    if has_historical:
+        # Synthesize 40% Historical Foundation + 60% Live Current Velocity
+        fused_risk_score = (0.40 * hist_foundation_score) + (0.60 * live_signals_score)
+        risk_basis = "predictive_multivariate (historical_marksheets + live_signals)"
+        combined_factors = live_factors + hist_factors
+    else:
+        fused_risk_score = live_signals_score
+        risk_basis = "live_semester_signals"
+        combined_factors = live_factors
 
-    # Classification Thresholds
-    if composite_risk_score >= 65.0 or (attendance_val is not None and attendance_val < 65.0) or (missed_assignments is not None and missed_assignments >= 2 and (quiz_val is not None and quiz_val < 55.0)):
+    # 3. Cross-Feature Interaction Rules & Escalation Multipliers
+    # Multiplier 1: Low Historical Foundation (CGPA < 5.8) + Sub-75% Attendance
+    if (cgpa is not None and cgpa < 5.8) and (attendance_val is not None and attendance_val < 75.0):
+        fused_risk_score = min(98.0, max(fused_risk_score, 82.0))
+        combined_factors.insert(0, "Compound Risk Alert: Low historical CGPA combined with attendance shortage")
+
+    # Multiplier 2: Cleared Prior Backlogs + Attendance < 80%
+    if len(cleared_backlogs) >= 2 and (attendance_val is not None and attendance_val < 80.0):
+        fused_risk_score = min(92.0, max(fused_risk_score, 62.0))
+        combined_factors.insert(0, "Vulnerability Alert: Multiple prior subject failures and borderline attendance")
+
+    # Multiplier 3: High Distinction Standing (CGPA >= 8.5) + Attendance >= 85%
+    if (cgpa is not None and cgpa >= 8.5) and (attendance_val is not None and attendance_val >= 85.0):
+        fused_risk_score = min(fused_risk_score, 12.0)
+
+    # 4. Final Calibrated Classification
+    if fused_risk_score >= 60.0 or (attendance_val is not None and attendance_val < 65.0) or (arrears_count >= 2):
         risk_level = "high"
-        recovery_prob = max(30.0, round(100.0 - composite_risk_score, 1))
-    elif composite_risk_score >= 38.0 or (attendance_val is not None and attendance_val < 80.0) or (missed_assignments == 1):
+        recovery_prob = max(30.0, round(100.0 - fused_risk_score, 1))
+    elif fused_risk_score >= 35.0 or (attendance_val is not None and attendance_val < 75.0) or (arrears_count == 1):
         risk_level = "medium"
-        recovery_prob = max(60.0, min(80.0, round(100.0 - composite_risk_score, 1)))
+        recovery_prob = max(58.0, min(80.0, round(100.0 - fused_risk_score, 1)))
     else:
         risk_level = "low"
-        recovery_prob = max(82.0, min(96.0, round(100.0 - composite_risk_score, 1)))
+        recovery_prob = max(84.0, min(96.0, round(100.0 - fused_risk_score, 1)))
 
-    if factors:
-        support_signal = f"Support recommended: {'; '.join(factors)}."
+    # Confidence calibration
+    if len(available_signals) >= 3 and has_historical:
+        confidence = "full"
+    elif len(available_signals) >= 1 or has_historical:
+        confidence = "partial"
     else:
-        support_signal = "Academic engagement and trajectory are consistent and on track."
+        confidence = "low"
+
+    if combined_factors:
+        support_signal = f"Predictive assessment: {'; '.join(combined_factors[:4])}."
+    else:
+        support_signal = "Academic engagement and marksheet trajectory are consistent and on track."
 
     shap_explanation = {}
     for s in available_signals:
         diff = signal_risks[s] - 30.0
         shap_explanation[s] = round(diff * normalized_weights[s], 2)
 
+    if has_historical:
+        shap_explanation["historical_foundation"] = round((hist_foundation_score - 30.0) * 0.40, 2)
+
     return {
         "risk_level": risk_level,
-        "risk_score": float(round(composite_risk_score, 1)),
+        "risk_score": float(round(fused_risk_score, 1)),
         "confidence": confidence,
         "risk_basis": risk_basis,
-        "factors": factors,
-        "risk_status": "evaluated",
+        "factors": combined_factors,
+        "risk_status": "evaluated_predictive",
         "recovery_probability": float(recovery_prob),
         "support_signal": support_signal,
         "attendance_change": -5.0 if (attendance_val and attendance_val < 75) else 2.0,
@@ -315,5 +406,15 @@ def calculate_academic_risk(student_context: Dict[str, Any]) -> Dict[str, Any]:
         "available_signals": available_signals,
         "missing_signals": missing_signals,
         "normalized_weights": normalized_weights,
+        "historical_summary": {
+            "cgpa": cgpa,
+            "latest_sgpa": latest_sgpa,
+            "sgpa_trend": sgpa_trend,
+            "arrears_count": arrears_count,
+            "cleared_backlogs_count": len(cleared_backlogs),
+            "total_semesters_completed": total_sems_completed,
+            "factors": hist_factors
+        },
         "shap_explanation": shap_explanation
     }
+

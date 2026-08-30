@@ -13,6 +13,22 @@ function Coach() {
       setCurrentUser(session.user);
       setCurrentSession(session);
     }
+
+    const handleMessage = (event) => {
+      if (
+        event.data &&
+        (event.data.type === "STUDY_PLAN_GENERATED" ||
+          event.data.type === "PLAN_CREATED" ||
+          event.data.study_plan)
+      ) {
+        const planData = event.data.plan || event.data.study_plan;
+        import("../services/studentService").then(({ studentService }) => {
+          studentService.syncAiStudyPlan(planData);
+        });
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   const studentIdentifier =
@@ -25,8 +41,8 @@ function Coach() {
     typeof window !== "undefined"
       ? `${window.location.protocol}//${window.location.hostname}:3000?student_id=${encodeURIComponent(
           studentIdentifier
-        )}${tokenParam}`
-      : `http://localhost:3000?student_id=${encodeURIComponent(studentIdentifier)}${tokenParam}`;
+        )}${tokenParam}&theme=dark&_v=${iframeKey}`
+      : `http://localhost:3000?student_id=${encodeURIComponent(studentIdentifier)}${tokenParam}&theme=dark&_v=${iframeKey}`;
 
   return (
     <div

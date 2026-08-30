@@ -17,6 +17,7 @@ import Recovery from "./pages/Recovery";
 import Coach from "./pages/Coach";
 import Goals from "./pages/Goals";
 import Resources from "./pages/Resources";
+import Support from "./pages/Support";
 
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -86,6 +87,8 @@ function AppRoutes() {
           <Route path="/goals" element={<Goals />} />
 
           <Route path="/resources" element={<Resources />} />
+
+          <Route path="/support" element={<Support />} />
 
           <Route path="/profile" element={<Profile />} />
 

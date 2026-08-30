@@ -3,17 +3,16 @@ import {
   BookOpen,
   ExternalLink,
   FileText,
-  Link2,
   FileSpreadsheet,
   Presentation,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   X,
-  Download,
   Sparkles,
-  CheckCircle2,
-  Bookmark,
+  Search,
+  User,
+  Calendar,
+  Layers,
+  GraduationCap,
+  Download,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -21,37 +20,9 @@ import { studentService } from "../services/studentService";
 import LoadingState from "../components/LoadingState";
 import ErrorState from "../components/ErrorState";
 
-const RESOURCE_DETAILS_MAP = {
-  1: {
-    modules: ["Unit 1: Relational Algebra & SQL DDL/DML", "Unit 2: Normalization (1NF, 2NF, 3NF, BCNF)", "Unit 3: Transaction Processing & ACID Properties", "Unit 4: Indexing & B-Trees"],
-    tips: "Focus on query optimization and indexing questions for upcoming assessments.",
-    fileUrl: "https://en.wikipedia.org/wiki/Database_management_system",
-  },
-  2: {
-    modules: ["Unit 1: OSI 7-Layer & TCP/IP Model", "Unit 2: Data Link Layer & Framing", "Unit 3: IP Addressing & Subnetting", "Unit 4: Routing Protocols (OSPF, BGP)"],
-    tips: "Review subnet calculation formulas and packet header structures.",
-    fileUrl: "https://en.wikipedia.org/wiki/Computer_network",
-  },
-  3: {
-    modules: ["Unit 1: Software Development Life Cycle (SDLC)", "Unit 2: Agile & Scrum Methodology", "Unit 3: UML Diagrams & System Architecture", "Unit 4: Testing & CI/CD Pipelines"],
-    tips: "Prepare use case and class diagrams for the semester project submission.",
-    fileUrl: "https://en.wikipedia.org/wiki/Software_engineering",
-  },
-  4: {
-    modules: ["Unit 1: Search Algorithms (A*, BFS, DFS)", "Unit 2: Knowledge Representation & First-Order Logic", "Unit 3: Machine Learning Foundations", "Unit 4: Neural Networks Basics"],
-    tips: "Review heuristic functions and state space search trees.",
-    fileUrl: "https://en.wikipedia.org/wiki/Artificial_intelligence",
-  },
-  5: {
-    modules: ["Part 1: Daily 60-minute Active Recall Routine", "Part 2: Pomodoro Technique & Spaced Repetition", "Part 3: Exam Review Roadmap", "Part 4: High-Yield Practice Sets"],
-    tips: "Follow the 3-step review cycle: Notes -> Practice Set -> Summary Card.",
-    fileUrl: "https://en.wikipedia.org/wiki/Active_recall",
-  },
-};
-
 function getResourceType(url = "", typeOverride = "") {
   if (typeOverride) return typeOverride.toUpperCase();
-  const cleanUrl = url.split("?")[0].toLowerCase();
+  const cleanUrl = (url || "").split("?")[0].toLowerCase();
 
   if (cleanUrl.endsWith(".pdf")) return "PDF";
   if (cleanUrl.endsWith(".doc") || cleanUrl.endsWith(".docx")) return "DOC";
@@ -62,12 +33,12 @@ function getResourceType(url = "", typeOverride = "") {
 }
 
 function ResourceIcon({ type }) {
-  if (type === "PDF") return <FileText size={21} />;
-  if (type === "DOC") return <FileText size={21} />;
-  if (type === "PPT") return <Presentation size={21} />;
-  if (type === "XLS") return <FileSpreadsheet size={21} />;
+  if (type === "PDF") return <FileText size={20} />;
+  if (type === "DOC") return <FileText size={20} />;
+  if (type === "PPT") return <Presentation size={20} />;
+  if (type === "XLS") return <FileSpreadsheet size={20} />;
 
-  return <BookOpen size={21} />;
+  return <BookOpen size={20} />;
 }
 
 function Resources() {
@@ -77,6 +48,7 @@ function Resources() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [category, setCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeModalResource, setActiveModalResource] = useState(null);
 
   const loadResources = useCallback(async () => {
@@ -91,7 +63,7 @@ function Resources() {
       setResources(resData || []);
       setMentor(mentorData);
     } catch (err) {
-      setError(err.message || "Unable to load resources.");
+      setError(err.message || "Unable to load learning resources.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +74,7 @@ function Resources() {
   }, [loadResources]);
 
   if (loading) {
-    return <LoadingState message="Loading your resources..." />;
+    return <LoadingState message="Loading your personalized study materials..." />;
   }
 
   if (error) {
@@ -115,18 +87,29 @@ function Resources() {
     );
   }
 
-  const filteredResources =
-    category === "all"
-      ? resources
-      : resources.filter(
-          (resource) =>
-            resource.category?.toLowerCase() === category ||
-            resource.target_category?.toLowerCase() === category
-        );
+  const filteredResources = resources.filter((resource) => {
+    const resCat = (resource.category || resource.target_category || "").toLowerCase();
+    const matchesCategory = category === "all" || resCat.includes(category.toLowerCase());
+
+    const titleMatch = (resource.title || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const descMatch = (resource.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const teacherMatch = (resource.teacher_name || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesCategory && (titleMatch || descMatch || teacherMatch);
+  });
+
+  const getFullResourceUrl = (res) => {
+    let targetUrl = res?.url || res?.resource_url || "";
+    if (targetUrl.startsWith("/uploads")) {
+      targetUrl = `http://localhost:5000${targetUrl}`;
+    }
+    return targetUrl;
+  };
 
   const openResource = (res) => {
-    if (res.url && res.url.startsWith("http")) {
-      window.open(res.url, "_blank", "noopener,noreferrer");
+    const targetUrl = getFullResourceUrl(res);
+    if (targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
     } else {
       setActiveModalResource(res);
     }
@@ -135,240 +118,469 @@ function Resources() {
   return (
     <div className="resources-page">
       {/* HEADER */}
-      <div className="resources-header">
+      <div
+        className="resources-header"
+        style={{
+          marginBottom: "24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
         <div>
-          <span className="dashboard-eyebrow">LEARNING MATERIAL</span>
-          <h2>Resources &amp; Materials</h2>
-          <p>
-            Curated course notes, syllabus guides, and reference materials shared by your faculty and mentor.
+          <h1 style={{ fontSize: "var(--font-2xl)", fontWeight: 700, margin: 0, color: "var(--text)" }}>
+            Learning Resources &amp; Course Materials
+          </h1>
+          <p style={{ margin: "6px 0 0", fontSize: "var(--font-base)", color: "var(--text-secondary)" }}>
+            Curated lecture notes, problem sets, and faculty remedial materials.
           </p>
         </div>
 
-        <div className="resources-header-icon">
-          <BookOpen size={22} />
+        <div
+          style={{
+            padding: "8px 16px",
+            borderRadius: "10px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <BookOpen size={20} color="var(--primary)" />
+          <span style={{ fontSize: "var(--font-sm)", fontWeight: 600, color: "var(--text)" }}>
+            {resources.length} {resources.length === 1 ? "Item" : "Items"} Available
+          </span>
         </div>
       </div>
 
-      {/* ASSIGNED MENTOR BANNER */}
+      {/* ASSIGNED FACULTY MENTOR CARD */}
       {mentor && (
-        <div style={{
-          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.04) 100%)",
-          border: "1px solid rgba(16, 185, 129, 0.25)",
-          borderRadius: "12px",
-          padding: "16px 20px",
-          marginBottom: "20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "12px"
-        }}>
-          <div>
-            <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.08em", color: "#10b981", textTransform: "uppercase" }}>
-              YOUR ASSIGNED FACULTY MENTOR
-            </span>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: "#fff", marginTop: "2px" }}>
-              {mentor.name}
+        <div
+          style={{
+            background: "linear-gradient(135deg, var(--surface) 0%, rgba(6, 214, 160, 0.05) 100%)",
+            border: "1px solid rgba(6, 214, 160, 0.3)",
+            borderRadius: "14px",
+            padding: "20px 24px",
+            marginBottom: "24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "12px",
+                background: "var(--primary-soft)",
+                color: "var(--primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <GraduationCap size={26} />
             </div>
-            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", marginTop: "2px" }}>
-              {mentor.designation} · {mentor.department} · {mentor.email} {mentor.phone ? `· ${mentor.phone}` : ""}
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--primary)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Assigned Faculty Mentor
+              </div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text)", marginTop: "2px" }}>
+                {mentor.name || mentor.full_name}
+              </div>
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {mentor.designation || "Faculty Mentor"} · {mentor.department || "ISE"} · {mentor.email} {mentor.phone ? `· ${mentor.phone}` : ""}
+              </div>
             </div>
           </div>
-          <span style={{
-            background: "rgba(16, 185, 129, 0.15)",
-            color: "#34d399",
-            border: "1px solid rgba(16, 185, 129, 0.3)",
-            borderRadius: "6px",
-            padding: "4px 10px",
-            fontSize: "11px",
-            fontWeight: 700
-          }}>
-            1-ON-1 ACTIVE MENTOR
+
+          <span
+            style={{
+              background: "rgba(6, 214, 160, 0.15)",
+              color: "var(--primary)",
+              border: "1px solid rgba(6, 214, 160, 0.3)",
+              borderRadius: "20px",
+              padding: "6px 14px",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            Active 1-on-1 Mentorship
           </span>
         </div>
       )}
 
-      {/* CONTENT PANEL */}
-      <section className="resources-panel">
-        <div className="resources-panel-header">
-          <div>
-            <span className="section-eyebrow">SHARED WITH YOU</span>
-            <h3>Learning resources</h3>
-            <span className="resources-count">
-              {filteredResources.length}{" "}
-              {filteredResources.length === 1 ? "resource" : "resources"}
-            </span>
-          </div>
-
-          <div className="resource-filter">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+      {/* FILTER & SEARCH BAR */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {[
+            { id: "all", label: "All Materials" },
+            { id: "academic", label: "Academic Notes" },
+            { id: "remedial", label: "Remedial & Guides" },
+            { id: "high", label: "Priority" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setCategory(tab.id)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "8px",
+                border: "1px solid",
+                borderColor: category === tab.id ? "var(--primary)" : "var(--border)",
+                background: category === tab.id ? "var(--primary-soft)" : "var(--surface)",
+                color: category === tab.id ? "var(--primary)" : "var(--text-secondary)",
+                fontSize: "var(--font-sm)",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
             >
-              <option value="all">All Resources</option>
-              <option value="academic">Academic Material</option>
-              <option value="high">High Priority</option>
-            </select>
-            <ChevronDown size={15} />
-          </div>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* LIST */}
+        <div style={{ position: "relative", minWidth: "260px" }}>
+          <Search
+            size={16}
+            style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}
+          />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search notes, topics, or faculty..."
+            style={{
+              width: "100%",
+              height: "38px",
+              padding: "0 12px 0 36px",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--text)",
+              fontSize: "var(--font-sm)",
+              outline: "none",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* RESOURCES GRID */}
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+          gap: "16px",
+        }}
+      >
         {filteredResources.length === 0 ? (
-          <div className="resources-empty">
-            <div className="resources-empty-icon">
-              <BookOpen size={24} />
-            </div>
-            <strong>No resources yet</strong>
-            <span>Your teachers haven't shared any resources in this category yet.</span>
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              padding: "40px 20px",
+              borderRadius: "14px",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--text-muted)",
+            }}
+          >
+            <BookOpen size={36} style={{ opacity: 0.5, marginBottom: "10px" }} />
+            <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--text)" }}>
+              No learning resources found.
+            </p>
+            <p style={{ margin: "6px 0 0", fontSize: "13px" }}>
+              Try clearing your search or checking other category filters.
+            </p>
           </div>
         ) : (
-          <div className="resource-list">
-            {filteredResources.map((resource) => {
-              const type = getResourceType(resource.url || "", resource.type);
+          filteredResources.map((resource) => {
+            const type = getResourceType(resource.url || resource.resource_url || "", resource.type);
+            const targetUrl = resource.url || resource.resource_url;
 
-              return (
-                <article className="resource-card" key={resource.id}>
-                  <div className={`resource-file-icon ${type.toLowerCase()}`}>
-                    <ResourceIcon type={type} />
-                    <span>{type}</span>
-                  </div>
-
-                  <div className="resource-main">
-                    <h3>{resource.title}</h3>
-                    <div className="resource-details">
-                      <span>
-                        Shared by <strong>{resource.teacher_name || "Faculty Mentor"}</strong>
-                      </span>
-                      <span className="resource-dot">•</span>
-                      <span>{resource.description || "Course study guide and key concepts"}</span>
+            return (
+              <article
+                key={resource.id}
+                style={{
+                  padding: "20px",
+                  borderRadius: "14px",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  transition: "transform 0.15s ease, border-color 0.15s ease",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
+                    <div
+                      style={{
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: "10px",
+                        background: "rgba(6, 214, 160, 0.1)",
+                        color: "var(--primary)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ResourceIcon type={type} />
+                      <span style={{ fontSize: "9px", fontWeight: 700, marginTop: "2px" }}>{type}</span>
                     </div>
-                  </div>
 
-                  <div className="resource-category">
-                    <span className="priority-badge general">
-                      {resource.category || "Study Material"}
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "3px 8px",
+                        borderRadius: "12px",
+                        background: "var(--surface-soft)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-secondary)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {resource.category || resource.target_category || "Academic"}
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    className="resource-open-btn"
-                    onClick={() => openResource(resource)}
-                    title={`Open ${resource.title}`}
+                  <h3
+                    style={{
+                      margin: "0 0 8px",
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: "var(--text)",
+                      lineHeight: "1.4",
+                    }}
                   >
-                    <span>Open</span>
-                    <ExternalLink size={14} />
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                    {resource.title}
+                  </h3>
 
-        {/* FOOTER */}
-        {filteredResources.length > 0 && (
-          <div className="resources-footer">
-            <span>
-              Showing 1 to {filteredResources.length} of {filteredResources.length} resources
-            </span>
-            <div className="resource-pagination">
-              <button disabled>
-                <ChevronLeft size={16} />
-              </button>
-              <button className="active">1</button>
-              <button disabled>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
+                  <p
+                    style={{
+                      margin: "0 0 16px",
+                      fontSize: "13px",
+                      color: "var(--text-secondary)",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    {resource.description || "Course study guide and key concepts shared by faculty mentor."}
+                  </p>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "12px",
+                      color: "var(--text-muted)",
+                      marginBottom: "14px",
+                      paddingTop: "12px",
+                      borderTop: "1px solid var(--border)",
+                    }}
+                  >
+                    <User size={14} color="var(--primary)" />
+                    <span>{resource.teacher_name || "Faculty Mentor"}</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModalResource(resource)}
+                      style={{
+                        flex: 1,
+                        height: "38px",
+                        padding: "0 14px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        background: "var(--surface-soft)",
+                        color: "var(--text)",
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>Preview</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openResource(resource)}
+                      style={{
+                        height: "38px",
+                        padding: "0 16px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "var(--primary)",
+                        color: "#061412",
+                        fontWeight: 700,
+                        fontSize: "13px",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>Open</span>
+                      <ExternalLink size={14} />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })
         )}
       </section>
 
-      {/* RESOURCE STUDY VIEWER MODAL */}
+      {/* RESOURCE PREVIEW MODAL */}
       {activeModalResource && (
-        <div className="resource-modal-overlay" onClick={() => setActiveModalResource(null)}>
-          <div className="resource-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="resource-modal-header">
-              <div className="resource-modal-title">
-                <span className="section-eyebrow">COURSE MATERIAL & STUDY GUIDE</span>
-                <h3>{activeModalResource.title}</h3>
+        <div className="goal-form-overlay" onClick={() => setActiveModalResource(null)}>
+          <div
+            style={{
+              padding: "26px",
+              borderRadius: "16px",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              maxWidth: "540px",
+              width: "100%",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "18px" }}>
+              <div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "12px",
+                    background: "var(--primary-soft)",
+                    color: "var(--primary)",
+                    fontWeight: 700,
+                    display: "inline-block",
+                    marginBottom: "6px",
+                  }}
+                >
+                  {activeModalResource.category || activeModalResource.target_category || "Academic"}
+                </span>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text)" }}>
+                  {activeModalResource.title}
+                </h3>
               </div>
               <button
                 type="button"
-                className="resource-modal-close"
                 onClick={() => setActiveModalResource(null)}
+                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="resource-modal-body">
-              <div className="resource-meta-bar">
-                <div className="meta-pill">
-                  <Bookmark size={13} />
-                  <span>{activeModalResource.category || "Core Curriculum"}</span>
-                </div>
-                <div className="meta-pill">
-                  <FileText size={13} />
-                  <span>Format: PDF / Digital Guide</span>
-                </div>
-              </div>
-
-              <div className="resource-section-block">
-                <h4>Key Modules & Syllabus Units</h4>
-                <div className="resource-module-list">
-                  {(
-                    RESOURCE_DETAILS_MAP[activeModalResource.id]?.modules || [
-                      "Unit 1: Core Fundamentals & Principles",
-                      "Unit 2: Implementation & Practical Exercises",
-                      "Unit 3: Advanced Applications & Review",
-                    ]
-                  ).map((mod, i) => (
-                    <div className="resource-module-item" key={i}>
-                      <CheckCircle2 size={15} />
-                      <span>{mod}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="resource-section-block study-tip-box">
-                <div className="tip-header">
-                  <Sparkles size={14} />
-                  <strong>Study Tip from Faculty</strong>
-                </div>
-                <p>
-                  {RESOURCE_DETAILS_MAP[activeModalResource.id]?.tips ||
-                    "Review summary notes after each lecture and solve the end-of-chapter practice problems."}
-                </p>
-              </div>
+            <div
+              style={{
+                padding: "14px 16px",
+                borderRadius: "10px",
+                background: "var(--surface-soft)",
+                border: "1px solid var(--border)",
+                marginBottom: "18px",
+              }}
+            >
+              <h4 style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 6px" }}>
+                Description &amp; Syllabus Overview
+              </h4>
+              <p style={{ fontSize: "14px", color: "var(--text)", margin: 0, lineHeight: 1.5 }}>
+                {activeModalResource.description || "Course study guide, unit slides, and revision problems shared by faculty mentor."}
+              </p>
             </div>
 
-            <div className="resource-modal-actions">
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "rgba(6,214,160,0.06)",
+                border: "1px solid rgba(6,214,160,0.2)",
+                marginBottom: "22px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--primary)", fontSize: "12px", fontWeight: 700, marginBottom: "4px" }}>
+                <Sparkles size={14} />
+                Faculty Mentor Note
+              </div>
+              <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                Shared by <strong>{activeModalResource.teacher_name || "Faculty Mentor"}</strong> ({activeModalResource.teacher_designation || "Department Faculty"}).
+                Review these materials before the upcoming internal assessment.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <button
                 type="button"
-                className="modal-ai-btn"
                 onClick={() => {
                   setActiveModalResource(null);
                   navigate("/coach");
                 }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--primary)",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
               >
-                <Sparkles size={14} />
-                <span>Ask AI Coach about this</span>
+                <Sparkles size={16} />
+                Discuss in AI Coach
               </button>
 
               <a
-                href={
-                  RESOURCE_DETAILS_MAP[activeModalResource.id]?.fileUrl ||
-                  "https://en.wikipedia.org/wiki/Computer_science"
-                }
+                href={getFullResourceUrl(activeModalResource) || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="modal-primary-btn"
+                style={{
+                  height: "38px",
+                  padding: "0 20px",
+                  borderRadius: "8px",
+                  background: "var(--primary)",
+                  color: "#061412",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
               >
                 <Download size={14} />
-                <span>Open External Reference</span>
+                <span>Open Reference</span>
                 <ExternalLink size={13} />
               </a>
             </div>

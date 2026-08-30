@@ -89,7 +89,6 @@ export default function Reports() {
   return (
     <div className="reports-page">
       <div className="reports-header">
-        <span className="dashboard-eyebrow">EXPORTS</span>
         <h2>Reports &amp; Download Center</h2>
         <p>Batch or individual exports for compliance and audit review.</p>
       </div>

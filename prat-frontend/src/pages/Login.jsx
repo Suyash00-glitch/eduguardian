@@ -6,15 +6,17 @@ import {
   Phone,
   ArrowRight,
   ShieldCheck,
-  Sparkles,
   AlertCircle,
   Loader2,
   Sun,
   Moon,
   RotateCw,
+  Sparkles,
+  GraduationCap,
+  Activity,
   CheckCircle2,
-  Building2,
-  BookOpen,
+  TrendingUp,
+  BrainCircuit,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -42,10 +44,7 @@ function Login() {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
-  const { portalLogin, demoLogin, loginLoading } = useAuth();
-
-  // Login Mode: "portal" (real student portal) vs "demo"
-  const [loginMode, setLoginMode] = useState("portal");
+  const { portalLogin, loginLoading } = useAuth();
 
   // Portal form fields
   const [mobile, setMobile] = useState("");
@@ -84,7 +83,7 @@ function Login() {
     }
 
     if (!agreeTerms) {
-      setError("Please accept the Student Portal usage terms.");
+      setError("Please accept the Student Portal connection authorization.");
       return;
     }
 
@@ -92,14 +91,6 @@ function Login() {
     if (!result.success) {
       setError(result.error);
       refreshCaptcha();
-    }
-  };
-
-  const handleDemoSubmit = async (demoId) => {
-    setError("");
-    const result = await demoLogin(demoId, true);
-    if (!result.success) {
-      setError(result.error);
     }
   };
 
@@ -116,8 +107,10 @@ function Login() {
         {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
-      {/* LEFT VISUAL PANEL */}
-      <section className="login-visual">
+      {/* =========================================================
+         LEFT SIDE: LANDING SHOWCASE & BRANDING
+         ========================================================= */}
+      <section className="login-visual" aria-label="EduGuardian Platform Overview">
         <div className="visual-background">
           <div className="visual-grid" />
           <div className="visual-glow glow-one" />
@@ -125,30 +118,30 @@ function Login() {
         </div>
 
         <div className="visual-content">
+          {/* BRAND BADGE */}
           <div className="brand-mark">
             <div className="brand-symbol">
-              <Sparkles size={18} />
+              <GraduationCap size={22} />
             </div>
             <div>
               <strong>EduGuardian</strong>
-              <span>AI-powered student success</span>
+              <span>STUDENT SUCCESS PLATFORM</span>
             </div>
           </div>
 
+          {/* HERO MESSAGE */}
           <div className="visual-message">
-            <span className="visual-eyebrow">AUTHENTIC STUDENT CONNECTION</span>
+            <span className="visual-eyebrow">ACADEMIC INTELLIGENCE PLATFORM</span>
             <h1>
-              Connect your
-              <br />
-              <span>Student Portal.</span>
-              <br />
-              Unlock your potential.
+              Protecting Academic <span>Trajectories</span> with AI Intelligence.
             </h1>
             <p>
-              Sign in with your University Solutions Student Portal account to view real-time academic records, learning trajectory, and personalized support plans.
+              Connect your student portal to access predictive risk scoring, real-time attendance diagnostics,
+              personalized recovery roadmaps, and autonomous AI coaching.
             </p>
           </div>
 
+          {/* LIVE INSIGHT PULSE CARD */}
           <div className="visual-insight">
             <div className="insight-pulse">
               <span />
@@ -156,201 +149,229 @@ function Login() {
               <span />
             </div>
             <div>
-              <strong>Authoritative & Privacy-Protected.</strong>
-              <p>
-                Your portal password is used solely for live authentication and is never persisted or logged.
-              </p>
+              <strong>Live Signal Synchronization Active</strong>
+              <p>Continuous monitoring across attendance records, internal assessments, and historical credits.</p>
             </div>
           </div>
 
+          {/* CAPABILITIES LIST */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px",
+              marginTop: "24px",
+              maxWidth: "480px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border)",
+                fontSize: "12px",
+                color: "var(--text)",
+              }}
+            >
+              <Activity size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <span>Real-Time Risk Scoring</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border)",
+                fontSize: "12px",
+                color: "var(--text)",
+              }}
+            >
+              <TrendingUp size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <span>Attendance Forensics</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border)",
+                fontSize: "12px",
+                color: "var(--text)",
+              }}
+            >
+              <BrainCircuit size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <span>AI Guidance Engine</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border)",
+                fontSize: "12px",
+                color: "var(--text)",
+              }}
+            >
+              <CheckCircle2 size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <span>Tailored Recovery Plans</span>
+            </div>
+          </div>
+
+          {/* VISUAL FOOTER */}
           <div className="visual-footer">
             <span>
-              <ShieldCheck size={13} />
-              Zero Password Storage
+              <ShieldCheck size={14} />
+              Institutional Grade Privacy
             </span>
             <span>
-              <Building2 size={13} />
-              University Solutions Portal
-            </span>
-            <span>
-              <Sparkles size={13} />
-              Explainable AI
+              <Sparkles size={14} />
+              Real-Time Portal Synchronization
             </span>
           </div>
         </div>
       </section>
 
-      {/* RIGHT LOGIN FORM */}
-      <section className="login-form-side">
+      {/* =========================================================
+         RIGHT SIDE: STUDENT SIGN IN FORM
+         ========================================================= */}
+      <section className="login-form-side" aria-label="Student Sign In Form">
         <div className="login-form-wrapper">
+          {/* MOBILE BRAND (shown when visual is collapsed) */}
           <div className="mobile-brand">
             <div className="brand-symbol">
-              <Sparkles size={17} />
+              <GraduationCap size={18} />
             </div>
-            <strong>EduGuardian</strong>
+            <div>
+              <strong>EduGuardian</strong>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>STUDENT PORTAL</div>
+            </div>
           </div>
 
+          {/* HEADING */}
           <div className="login-heading">
-            <span className="form-eyebrow">UNIVERSITY SOLUTIONS PORTAL</span>
+            <span className="form-eyebrow">SECURE STUDENT ACCESS</span>
             <h2>Student Sign In</h2>
-            <p>Enter your student portal mobile number and password to access your dashboard.</p>
+            <p>Enter your University Solutions credentials to synchronize your student portal.</p>
           </div>
 
-          {/* MODE SELECTOR */}
-          <div className="login-mode-tabs" style={{ display: "flex", gap: "8px", marginBottom: "18px" }}>
-            <button
-              type="button"
-              className={`mode-tab-btn ${loginMode === "portal" ? "active" : ""}`}
-              onClick={() => setLoginMode("portal")}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                background: loginMode === "portal" ? "var(--primary-soft)" : "transparent",
-                color: loginMode === "portal" ? "var(--primary)" : "var(--text-muted)",
-                fontSize: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Student Portal Login
-            </button>
-            <button
-              type="button"
-              className={`mode-tab-btn ${loginMode === "demo" ? "active" : ""}`}
-              onClick={() => setLoginMode("demo")}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                background: loginMode === "demo" ? "var(--primary-soft)" : "transparent",
-                color: loginMode === "demo" ? "var(--primary)" : "var(--text-muted)",
-                fontSize: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Demo Profile Mode
-            </button>
-          </div>
-
+          {/* ERROR ALERT */}
           {error && (
-            <div className="login-error">
-              <AlertCircle size={15} />
+            <div className="login-error" role="alert">
+              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
               <span>{error}</span>
             </div>
           )}
 
-          {loginMode === "portal" ? (
-            /* REAL PORTAL LOGIN FORM */
-            <form onSubmit={handlePortalSubmit}>
-              {/* Registered Mobile */}
-              <div className="form-field">
-                <label htmlFor="portal-mobile">Registered Mobile Number (10 Digits)</label>
-                <div className="input-wrapper">
-                  <Phone size={16} />
-                  <input
-                    id="portal-mobile"
-                    type="tel"
-                    value={mobile}
-                    disabled={loginLoading}
-                    placeholder="e.g. 9876543210"
-                    maxLength={10}
-                    autoComplete="username"
-                    onChange={(e) => {
-                      setMobile(e.target.value.replace(/\D/g, ""));
-                      if (error) setError("");
-                    }}
-                    required
-                  />
-                </div>
+          {/* FORM */}
+          <form onSubmit={handlePortalSubmit}>
+            {/* REGISTERED MOBILE NUMBER */}
+            <div className="form-field">
+              <label htmlFor="student-mobile">Registered Mobile Number</label>
+              <div className="input-wrapper">
+                <Phone size={16} />
+                <input
+                  id="student-mobile"
+                  type="tel"
+                  className="login-input"
+                  value={mobile}
+                  disabled={loginLoading}
+                  placeholder="Enter 10-digit mobile number"
+                  maxLength={10}
+                  autoComplete="username"
+                  onChange={(e) => {
+                    setMobile(e.target.value.replace(/\D/g, ""));
+                    if (error) setError("");
+                  }}
+                  required
+                />
               </div>
+            </div>
 
-              {/* Portal Password */}
-              <div className="form-field">
-                <div className="password-label-row">
-                  <label htmlFor="portal-password">Student Portal Password</label>
-                  <a
-                    href="https://studentportal.universitysolutions.in/index.html"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="forgot-button"
-                    style={{ textDecoration: "none" }}
-                  >
-                    Forgot on Portal?
-                  </a>
-                </div>
-                <div className="input-wrapper">
-                  <LockKeyhole size={16} />
-                  <input
-                    id="portal-password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    disabled={loginLoading}
-                    placeholder="Enter your student portal password"
-                    autoComplete="current-password"
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (error) setError("");
-                    }}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    disabled={loginLoading}
-                    onClick={() => setShowPassword((current) => !current)}
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
+            {/* PORTAL PASSWORD */}
+            <div className="form-field">
+              <div className="password-label-row">
+                <label htmlFor="student-password">Portal Password</label>
+                <a
+                  href="https://studentportal.universitysolutions.in/index.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="forgot-button"
+                  style={{ textDecoration: "none", cursor: "pointer" }}
+                >
+                  Forgot Password?
+                </a>
               </div>
+              <div className="input-wrapper">
+                <LockKeyhole size={16} />
+                <input
+                  id="student-password"
+                  type={showPassword ? "text" : "password"}
+                  className="login-input"
+                  value={password}
+                  disabled={loginLoading}
+                  placeholder="Enter your portal password"
+                  autoComplete="current-password"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError("");
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  disabled={loginLoading}
+                  onClick={() => setShowPassword((curr) => !curr)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
 
-              {/* CAPTCHA CHALLENGE */}
-              <div className="form-field">
-                <label htmlFor="portal-captcha">Security Verification (CAPTCHA)</label>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <div
-                    style={{
-                      background: "rgba(6, 214, 160, 0.1)",
-                      border: "1px dashed var(--primary)",
-                      borderRadius: "8px",
-                      padding: "8px 16px",
-                      fontSize: "18px",
-                      fontWeight: 800,
-                      letterSpacing: "4px",
-                      color: "var(--primary)",
-                      userSelect: "none",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {captchaTarget}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={refreshCaptcha}
-                    title="Refresh Captcha"
-                    style={{
-                      background: "var(--surface-soft)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "8px",
-                      padding: "9px 12px",
-                      cursor: "pointer",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    <RotateCw size={15} />
-                  </button>
-                  <div className="input-wrapper" style={{ flex: 1 }}>
+            {/* CAPTCHA CHALLENGE */}
+            <div className="form-field">
+              <label htmlFor="captcha-code">Security Code (CAPTCHA)</label>
+              <div className="captcha-row">
+                <div className="captcha-badge" title="Verification Code">
+                  {captchaTarget}
+                </div>
+                <button
+                  type="button"
+                  className="captcha-refresh"
+                  onClick={refreshCaptcha}
+                  title="Refresh security code"
+                  aria-label="Refresh security code"
+                >
+                  <RotateCw size={15} />
+                </button>
+                <div className="captcha-input-wrap">
+                  <div className="input-wrapper">
                     <input
-                      id="portal-captcha"
+                      id="captcha-code"
                       type="text"
+                      className="login-input"
                       value={captchaInput}
                       disabled={loginLoading}
-                      placeholder="Enter 6 digits"
+                      placeholder="6 digits"
                       maxLength={6}
+                      style={{ paddingLeft: "14px" }}
                       onChange={(e) => {
                         setCaptchaInput(e.target.value.replace(/\D/g, ""));
                         if (error) setError("");
@@ -360,123 +381,67 @@ function Login() {
                   </div>
                 </div>
               </div>
-
-              {/* Instructions Checkbox */}
-              <label className="remember-row" style={{ marginTop: "12px" }}>
-                <input
-                  type="checkbox"
-                  checked={agreeTerms}
-                  disabled={loginLoading}
-                  onChange={(e) => setAgreeTerms(e.target.checked)}
-                  required
-                />
-                <span style={{ fontSize: "11px" }}>
-                  I acknowledge and authorize connection with University Solutions Student Portal.
-                </span>
-              </label>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                className="login-submit"
-                disabled={loginLoading}
-              >
-                {loginLoading ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    Authenticating with Student Portal...
-                  </>
-                ) : (
-                  <>
-                    Connect & Sign In
-                    <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            /* DEMO ACCOUNT QUICK SELECT */
-            <div className="demo-profile-box" style={{ marginTop: "10px" }}>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                Select a sample student profile to explore EduGuardian with simulated records:
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <button
-                  type="button"
-                  onClick={() => handleDemoSubmit("Alex Johnson")}
-                  disabled={loginLoading}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    borderRadius: "9px",
-                    border: "1px solid var(--border)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div>
-                    <strong>Alex Johnson</strong>
-                    <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>USN: 1MS21IS001 · 92.5% Attendance (On Track)</div>
-                  </div>
-                  <ArrowRight size={14} color="var(--primary)" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDemoSubmit("David Miller")}
-                  disabled={loginLoading}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    borderRadius: "9px",
-                    border: "1px solid var(--border)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div>
-                    <strong>David Miller</strong>
-                    <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>USN: NNM24IS019 · 52.5% Attendance (Support Plan)</div>
-                  </div>
-                  <ArrowRight size={14} color="var(--primary)" />
-                </button>
-              </div>
             </div>
-          )}
+
+            {/* AUTHORIZATION & TERMS */}
+            <label className="terms-row">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                disabled={loginLoading}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                required
+              />
+              <span>I authorize secure live synchronization with University Solutions student records.</span>
+            </label>
+
+            {/* REMEMBER ME */}
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                disabled={loginLoading}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Remember this session on this device</span>
+            </label>
+
+            {/* SUBMIT BUTTON */}
+            <button type="submit" className="login-submit" disabled={loginLoading}>
+              {loginLoading ? (
+                <>
+                  <Loader2 size={16} className="spin" />
+                  <span>Authenticating Portal...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In to Dashboard</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
 
           {/* FACULTY PORTAL SWITCHER */}
-          <div className="portal-switch-card" style={{ marginTop: "20px" }}>
+          <div className="portal-switch-card">
             <div className="portal-switch-info">
-              <span className="portal-switch-badge">FACULTY & ADMIN</span>
-              <p>Are you a teacher, mentor or department admin?</p>
+              <span className="portal-switch-badge">FACULTY & ADVISORS</span>
+              <p>Looking for the Faculty & Admin Gateway?</p>
             </div>
-            <a
-              href="http://localhost:3002/login"
-              className="portal-switch-link"
-              title="Switch to Teacher & Admin Portal"
-            >
-              <span>Teacher Login</span>
-              <ArrowRight size={13} />
+            <a href="http://localhost:3002/login" className="portal-switch-link">
+              Faculty Portal
+              <ArrowRight size={12} />
             </a>
           </div>
 
+          {/* SECURITY NOTE & COPYRIGHT */}
           <div className="login-security">
-            <ShieldCheck size={13} />
-            <span>
-              Passwords are never saved. Real portal sessions are securely authenticated.
-            </span>
+            <ShieldCheck size={14} />
+            <span>Credentials are authenticated via secure HTTPS handshake and never persisted in cleartext.</span>
           </div>
 
           <div className="login-copyright">
-            EduGuardian · University Solutions Integration
+            © 2026 EduGuardian AI · Student Success & Risk Protection Platform
           </div>
         </div>
       </section>

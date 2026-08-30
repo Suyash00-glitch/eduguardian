@@ -191,7 +191,7 @@ const ReportsView = () => {
       fileContent = "StudentID,StudentName,RiskLevel,Attendance,QuizAvg\nSTU-101,Rahul Verma,High,24%,48%\nSTU-102,Priya Sharma,Medium,68%,61%\nSTU-103,Arjun N.,High,20%,40%\nSTU-104,Meera Iyer,Low,94%,88%";
     } else {
       fileName = `EduGuardian_Student_Brief_${new Date().toISOString().split('T')[0]}.txt`;
-      fileContent = "EDUGUARDIAN AI 2.0 - INDIVIDUAL COMPLIANCE & INTERVENTION BRIEF\n\nStudent: Rahul Verma (STU-101)\nRisk Level: High Risk\nPrimary Drivers: Attendance decline (-35%), Missed LMS submissions (-22%)\nFaculty Recommendation: Assign mentor immediately. Estimated recovery probability: 89%.";
+      fileContent = "EDUGUARDIAN AI - INDIVIDUAL COMPLIANCE & INTERVENTION BRIEF\n\nStudent: Rahul Verma (STU-101)\nRisk Level: High Risk\nPrimary Drivers: Attendance decline (-35%), Missed LMS submissions (-22%)\nFaculty Recommendation: Assign mentor immediately. Estimated recovery probability: 89%.";
     }
 
     // Create browser Blob and trigger download

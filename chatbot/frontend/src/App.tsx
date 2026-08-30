@@ -32,11 +32,13 @@ function App() {
 
   // Light / Dark Theme State & Persistence
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qTheme = urlParams.get('theme');
+      if (qTheme === 'light' || qTheme === 'dark') return qTheme;
+    }
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
-    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      return 'light';
-    }
     return 'dark';
   });
 

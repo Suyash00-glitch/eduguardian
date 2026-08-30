@@ -232,10 +232,9 @@ export default function StudentRoster() {
       {/* ── Page Header ───────────────────────────────────────────── */}
       <div className="roster-header">
         <div>
-          <span className="dashboard-eyebrow">FACULTY &amp; ADMIN PORTAL</span>
-          <h2>Student Risk &amp; Academic Explainability</h2>
+          <h2>Student Risk &amp; Academic Diagnostics</h2>
           <p>
-            Authoritative cohort view · {active?.department || "ISE"} · Semester {active?.semester || 5} · Section{" "}
+            Cohort records and explainable risk profiles · {active?.department || "ISE"} · Semester {active?.semester || 5} · Section{" "}
             {active?.section || "C"}
           </p>
         </div>
@@ -646,8 +645,7 @@ export default function StudentRoster() {
                 <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: "12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
-                      <span className="dashboard-eyebrow">EXPLAINABLE RISK PROFILE</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <h3 style={{ margin: 0, fontSize: "18px" }}>{profile.name}</h3>
                         {isPortal ? (
                           <span
@@ -786,9 +784,9 @@ export default function StudentRoster() {
 
                 {/* Academic Standing & Trajectory Indicators */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span className="dashboard-eyebrow" style={{ fontSize: "10px" }}>
-                    ACADEMIC STANDING &amp; OBSERVATIONS
-                  </span>
+                  <h4 style={{ margin: 0, fontSize: "var(--font-sm)", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    Academic Standing &amp; Observations
+                  </h4>
                   <div className="roster-detail-rows">
                     <div>
                       <span>Cumulative CGPA</span>
@@ -821,9 +819,9 @@ export default function StudentRoster() {
 
                 {/* Explainable Contributing Factors (from Backend Engine) */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span className="dashboard-eyebrow" style={{ fontSize: "10px" }}>
-                    CONTRIBUTING RISK SIGNALS (BACKEND EXPLAINABILITY)
-                  </span>
+                  <h4 style={{ margin: 0, fontSize: "var(--font-sm)", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    Contributing Risk Signals
+                  </h4>
                   {factors && factors.length > 0 ? (
                     <ul
                       style={{
@@ -943,10 +941,7 @@ export default function StudentRoster() {
                 }}
               >
                 <div>
-                  <span className="dashboard-eyebrow">
-                    {isPortal ? "UNIVERSITY SOLUTIONS PORTAL RECORDS" : "DEMO STUDENT RECORD"}
-                  </span>
-                  <h3 style={{ margin: "4px 0 2px" }}>Academic Marks Cards — {profile?.name}</h3>
+                  <h3 style={{ margin: "0 0 4px" }}>Academic Marks Cards — {profile?.name}</h3>
                   <span style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "monospace" }}>
                     USN: {profile?.usn} · CGPA: {cgpa ? Number(cgpa).toFixed(2) : "—"} · Completed Semesters:{" "}
                     {detailedProfile?.academic_performance?.completed_semesters || detailedProfile?.historical_semesters?.length || (isPortal ? 4 : 4)}

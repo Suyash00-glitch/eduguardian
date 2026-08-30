@@ -81,7 +81,7 @@ export default function MentorAssignment() {
       const params = new URLSearchParams({
         department: active?.department || "ISE",
         semester: String(active?.semester || 5),
-        section: active?.section || "A",
+        section: active?.section || "C",
         page: "1",
         page_size: "200",
         risk: "all",
@@ -201,7 +201,6 @@ export default function MentorAssignment() {
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
         <div>
-          <span className="dashboard-eyebrow">HUMAN-IN-THE-LOOP</span>
           <h2>Mentor Assignment</h2>
           <p>{active?.department || "ISE"} · Semester {active?.semester || 5} · Section {active?.section || "A"}</p>
         </div>
@@ -212,13 +211,13 @@ export default function MentorAssignment() {
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            background: "rgba(99, 102, 241, 0.15)",
-            color: "#a5b4fc",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
+            background: "rgba(6, 214, 160, 0.12)",
+            color: "var(--primary)",
+            border: "1px solid rgba(6, 214, 160, 0.25)",
             borderRadius: "8px",
             padding: "8px 14px",
             fontSize: "12px",
-            fontWeight: 600,
+            fontWeight: 700,
             cursor: "pointer"
           }}
         >
@@ -441,13 +440,13 @@ export default function MentorAssignment() {
               style={{
                 marginTop: "16px",
                 width: "100%",
-                background: "#6366f1",
-                color: "#fff",
+                background: "var(--primary)",
+                color: "#03251c",
                 border: "none",
                 borderRadius: "8px",
                 padding: "12px",
                 fontSize: "13px",
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: !selectedStudent || !selectedMentor || submitting ? "not-allowed" : "pointer",
                 opacity: !selectedStudent || !selectedMentor || submitting ? 0.6 : 1
               }}

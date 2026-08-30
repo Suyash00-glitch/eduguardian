@@ -1,17 +1,20 @@
-import { demoRecoveryPlan } from "./demoData";
+import { studentService } from "./studentService";
 
 export const recoveryService = {
   async getPlan() {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return demoRecoveryPlan;
+    return studentService.getRecoveryPlan();
   },
 
   async completeTask(taskId) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    return {
-      success: true,
-      taskId,
-    };
+    return studentService.toggleRecoveryTask(taskId);
   },
+
+  async syncAiStudyPlan(aiPlanData) {
+    return studentService.syncAiStudyPlan(aiPlanData);
+  },
+
+  async generateAiPlan(prompt) {
+    return studentService.generateAiRecoveryPlan(prompt);
+  }
 };
+

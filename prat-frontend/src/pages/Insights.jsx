@@ -1,18 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
-
 import {
   ArrowRight,
   CheckCircle2,
-  Info,
   Sparkles,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-
 import { useNavigate } from "react-router-dom";
-
 import { studentService } from "../services/studentService";
-
 import LoadingState from "../components/LoadingState";
 import ErrorState from "../components/ErrorState";
 
@@ -29,7 +24,6 @@ function Insights() {
 
     try {
       const result = await studentService.getInsights();
-
       setData(result);
     } catch (err) {
       setError(err.message || "Unable to load your insights.");
@@ -69,121 +63,210 @@ function Insights() {
   return (
     <div className="insights-page">
       {/* Header */}
-
-      <div className="insights-header">
+      <div className="insights-header" style={{ marginBottom: "24px" }}>
         <div>
-          <span className="dashboard-eyebrow">EXPLAINABLE AI</span>
-
-          <h2>My Insights</h2>
-
-          <p>Understand what is influencing your academic progress.</p>
+          <h1 style={{ fontSize: "var(--font-2xl)", fontWeight: 700, margin: 0, color: "var(--text)" }}>
+            Academic Insights
+          </h1>
+          <p style={{ margin: "6px 0 0", fontSize: "var(--font-base)", color: "var(--text-secondary)" }}>
+            Explainable analysis and personalized patterns influencing your academic performance.
+          </p>
         </div>
 
-        <div className="ai-powered-label">
-          <Sparkles size={13} />
-          AI powered
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "var(--font-xs)",
+            fontWeight: 600,
+            padding: "6px 12px",
+            borderRadius: "20px",
+            background: "rgba(6,214,160,0.12)",
+            color: "var(--primary)",
+            border: "1px solid rgba(6,214,160,0.25)",
+          }}
+        >
+          <Sparkles size={14} />
+          Diagnostic Guidance
         </div>
       </div>
 
-      {/* Main AI Summary */}
-
-      <section className="insight-summary">
-        <div className="insight-summary-main">
-          <div className="insight-summary-icon">
-            <Sparkles size={19} />
+      {/* Main Support Signal Summary */}
+      <section
+        className="insight-summary"
+        style={{
+          padding: "22px 24px",
+          borderRadius: "12px",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flex: 1 }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px",
+              background: "var(--primary-soft)",
+              color: "var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Sparkles size={20} />
           </div>
 
           <div>
-            <span className="section-eyebrow">CURRENT SUPPORT SIGNAL</span>
-
-            <h3>{data.signal}</h3>
-
-            <p>{data.summary}</p>
+            <h3 style={{ fontSize: "var(--font-lg)", fontWeight: 600, margin: 0, color: "var(--text)" }}>
+              {data.signal}
+            </h3>
+            <p style={{ margin: "6px 0 0", fontSize: "var(--font-base)", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              {data.summary}
+            </p>
           </div>
         </div>
 
-        <div className="insight-momentum">
-          <span>LEARNING TRAJECTORY</span>
-          <strong>{data.recoveryProbability >= 80 ? "On Track" : (data.recoveryProbability >= 60 ? "Steady Momentum" : "Focus Recommended")}</strong>
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "10px",
+            background: "var(--surface-soft)",
+            border: "1px solid var(--border)",
+            textAlign: "center",
+          }}
+        >
+          <span style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", display: "block" }}>
+            Current Standing
+          </span>
+          <strong style={{ fontSize: "var(--font-md)", color: "var(--primary)", fontWeight: 700, marginTop: "2px", display: "block" }}>
+            {data.recoveryProbability >= 80 ? "On Track" : data.recoveryProbability >= 60 ? "Steady Momentum" : "Focus Recommended"}
+          </strong>
         </div>
       </section>
 
       {/* Trajectory */}
-
-      <section className="insight-recovery">
-        <div>
-          <span className="section-eyebrow">ACADEMIC TRAJECTORY</span>
-
-          <h3>How likely are you to stay on track?</h3>
-
-          <p>
-            This estimate is based on recent academic engagement patterns. It is
-            designed to provide support and constructive guidance.
+      <section
+        className="insight-recovery"
+        style={{
+          padding: "22px 24px",
+          borderRadius: "12px",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ maxWidth: "600px" }}>
+          <h3 style={{ fontSize: "var(--font-md)", fontWeight: 600, margin: 0, color: "var(--text)" }}>
+            Academic Success Outlook
+          </h3>
+          <p style={{ margin: "6px 0 0", fontSize: "var(--font-sm)", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            This projection is evaluated from semester examination trends and academic engagement to provide constructive guidance.
           </p>
         </div>
 
-        <div className="insight-probability">
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div
-            className="probability-ring"
             style={{
-              "--progress": `${data.recoveryProbability * 3.6}deg`,
+              fontSize: "var(--font-stat)",
+              fontWeight: 800,
+              color: data.recoveryProbability >= 75 ? "var(--primary)" : "#ffd166",
             }}
           >
-            <strong>{data.recoveryProbability}%</strong>
-
-            <span>on track</span>
+            {data.recoveryProbability}%
           </div>
+          <span style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", fontWeight: 500 }}>
+            Success probability
+          </span>
         </div>
       </section>
 
       {/* Factors */}
-
-      <section className="insight-panel">
-        <div className="insight-panel-header">
-          <div>
-            <span className="section-eyebrow">WHY THIS SIGNAL?</span>
-
-            <h3>Factors influencing your progress</h3>
-          </div>
-
-          <div className="explainable-label">
-            <Info size={12} />
-            Explainable
-          </div>
+      <section
+        className="insight-panel"
+        style={{
+          padding: "22px 24px",
+          borderRadius: "12px",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "var(--font-md)", fontWeight: 600, margin: 0, color: "var(--text)" }}>
+            Key Academic Factors
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>
+            Primary drivers influencing your semester performance.
+          </p>
         </div>
 
-        <div className="factor-list">
+        <div className="factor-list" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {data.factors.map((factor) => {
             const positive = factor.impact === "positive";
 
             return (
-              <div className="factor-row" key={factor.name}>
+              <div
+                className="factor-row"
+                key={factor.name}
+                style={{
+                  padding: "14px 18px",
+                  borderRadius: "10px",
+                  background: "var(--surface-soft)",
+                  border: "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                }}
+              >
                 <div
-                  className={`factor-icon ${
-                    positive ? "positive" : "negative"
-                  }`}
+                  style={{
+                    width: "34px",
+                    height: "34px",
+                    borderRadius: "8px",
+                    background: positive ? "rgba(6,214,160,0.12)" : "rgba(231,111,111,0.12)",
+                    color: positive ? "var(--primary)" : "var(--danger)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
                 >
-                  {positive ? (
-                    <TrendingUp size={15} />
-                  ) : (
-                    <TrendingDown size={15} />
-                  )}
+                  {positive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                 </div>
 
-                <div className="factor-info">
-                  <div className="factor-title">
-                    <strong>{factor.name}</strong>
-
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <strong style={{ fontSize: "var(--font-base)", color: "var(--text)" }}>{factor.name}</strong>
                     <span
-                      className={
-                        positive ? "factor-positive" : "factor-negative"
-                      }
+                      style={{
+                        fontSize: "var(--font-xs)",
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        background: positive ? "rgba(6,214,160,0.12)" : "rgba(231,111,111,0.12)",
+                        color: positive ? "var(--primary)" : "var(--danger)",
+                      }}
                     >
                       {factor.value}
                     </span>
                   </div>
-
-                  <p>{factor.explanation}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "var(--font-sm)", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                    {factor.explanation}
+                  </p>
                 </div>
               </div>
             );
@@ -191,69 +274,67 @@ function Insights() {
         </div>
       </section>
 
-      {/* Recent Changes */}
+      {/* Action Recommendation */}
+      <section
+        className="insight-action"
+        style={{
+          padding: "20px 24px",
+          borderRadius: "12px",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1 }}>
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "9px",
+              background: "var(--primary-soft)",
+              color: "var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircle2 size={18} />
+          </div>
 
-      <section className="insight-panel">
-        <div className="insight-panel-header">
           <div>
-            <span className="section-eyebrow">RECENT CHANGES</span>
-
-            <h3>What changed recently?</h3>
+            <h3 style={{ fontSize: "var(--font-base)", fontWeight: 600, margin: 0, color: "var(--text)" }}>
+              Recommended Study Strategies
+            </h3>
+            <p style={{ margin: "3px 0 0", fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
+              Explore actionable weekly routines and revision planning with your personalized coach.
+            </p>
           </div>
         </div>
 
-        <div className="change-grid">
-          {data.changes.map((change) => {
-            const positive = change.direction === "up";
-
-            return (
-              <div className="change-card" key={change.label}>
-                <div className="change-card-top">
-                  <span>{change.label}</span>
-
-                  {positive ? (
-                    <TrendingUp size={14} className="change-positive" />
-                  ) : (
-                    <TrendingDown size={14} className="change-negative" />
-                  )}
-                </div>
-
-                <strong
-                  className={positive ? "change-positive" : "change-negative"}
-                >
-                  {change.value}
-                </strong>
-
-                <span className="change-period">
-                  compared with previous period
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Action */}
-
-      <section className="insight-action">
-        <div className="insight-action-icon">
-          <CheckCircle2 size={18} />
-        </div>
-
-        <div>
-          <span className="section-eyebrow">NEXT STEP</span>
-
-          <h3>Want to improve your academic trajectory?</h3>
-
-          <p>
-            EduGuardian can create a personalized recovery plan based on your
-            current situation.
-          </p>
-        </div>
-
-        <button onClick={() => navigate("/recovery")}>
-          View my plan
-          <ArrowRight size={13} />
+        <button
+          onClick={() => navigate("/coach")}
+          style={{
+            height: "38px",
+            padding: "0 18px",
+            borderRadius: "8px",
+            border: "none",
+            background: "var(--primary)",
+            color: "#061412",
+            fontWeight: 700,
+            fontSize: "var(--font-sm)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          Open AI Coach
+          <ArrowRight size={14} />
         </button>
       </section>
     </div>

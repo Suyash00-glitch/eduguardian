@@ -89,9 +89,10 @@ CREATE TABLE IF NOT EXISTS assignment_submissions (
     id serial primary key,
     student_id int not null references students(id) on delete cascade,
     assignment_id int references assignments(id) on delete cascade,
-    submission_status varchar(20) check (submission_status in ('submitted', 'missed', 'late')),
+    submission_status varchar(20) check (submission_status in ('submitted', 'missed', 'late', 'graded')),
     submission_date date,
     marks_obtained decimal(6,2),
+    feedback text,
     file_name varchar(255),
     file_url text,
     file_type varchar(100),
@@ -145,7 +146,7 @@ CREATE TABLE IF NOT EXISTS risk_predictions (
 
 CREATE TABLE IF NOT EXISTS student_resources (
     id serial primary key,
-    student_id int not null references students(id) on delete cascade,
+    student_id int references students(id) on delete cascade,
     teacher_id int not null references teachers(id) on delete cascade,
     title varchar(255) not null,
     description text,
@@ -157,58 +158,201 @@ CREATE TABLE IF NOT EXISTS student_resources (
     is_read boolean default false
 );
 
+CREATE TABLE IF NOT EXISTS student_goals (
+    id serial primary key,
+    student_id int not null references students(id) on delete cascade,
+    title varchar(255) not null,
+    category varchar(50) default 'Academic',
+    target varchar(100) not null,
+    progress int default 0,
+    status varchar(30) default 'in-progress',
+    due_date date,
+    created_at timestamp default current_timestamp,
+    updated_at timestamp default current_timestamp
+);
+
+CREATE TABLE IF NOT EXISTS goal_milestones (
+    id serial primary key,
+    goal_id int not null references student_goals(id) on delete cascade,
+    title varchar(255) not null,
+    completed boolean default false,
+    completed_at timestamp,
+    created_at timestamp default current_timestamp
+);
+
+CREATE TABLE IF NOT EXISTS portal_student_contexts (
+    user_id int primary key references users(id) on delete cascade,
+    student_context jsonb not null,
+    updated_at timestamp default current_timestamp
+);
+
 -- Seed Subjects
 INSERT INTO subjects (subject_code, subject_name, course_type) VALUES
     ('IS3001-1', 'DCN: Data Communication and Networking', 'IPCC'),
     ('IS2002-1', 'ML: Machine Learning Foundations', 'IPCC'),
     ('IS3101-1', 'OS: Operating Systems Fundamentals', 'PCC'),
     ('HU1011-1', 'UHV: Universal Human Values', 'HSMC'),
-    ('IS1604-1', 'MD: MERNSTACK Development', 'PCC')
+    ('IS1604-1', 'MD: MERNSTACK Development', 'PCC'),
+    ('UM1003-1', 'ESD: Employability Skill Development', 'AEC'),
+    ('HU1007-1', 'SCR: Social Connect & Responsibility', 'AEC'),
+    ('HU1010-1', 'RM: Research Methodology', 'AEC')
 ON CONFLICT (subject_code) DO NOTHING;
 
--- Seed Teachers:
--- 1. Dr. Sarah Jenkins: teacher@example.com / teacher123
-INSERT INTO users (full_name, email, password_hash, role, is_active)
-VALUES ('Dr. Sarah Jenkins', 'teacher@example.com', '$2b$12$KKBYuRi5fTzfbr11gKK1oO2et1Pkrv7RomSVsF3H9SDptBrja6r4q', 'teacher', true)
-ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name;
+-- Seed NMAMIT ISE Semester 5 Section C Faculty Members: Default Password = 123456 ($2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342)
 
-INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
-SELECT id, 'EMP-001', 'ISE', 'Associate Professor', 10, true FROM users WHERE email = 'teacher@example.com'
-ON CONFLICT (user_id) DO UPDATE SET designation = 'Associate Professor', capacity = 10, is_active = true;
-
--- 2. Dr. Ahmed Khan: ahmed.khan@university.edu / mentor123
+-- 1. Dr. Preethi Salian K (Class Advisor & UHV Faculty)
 INSERT INTO users (full_name, email, password_hash, role, is_active)
-VALUES ('Dr. Ahmed Khan', 'ahmed.khan@university.edu', '$2b$12$ENvT64sc6xP7Z.PFeAzIieZ5tD7/8V9NXZM7/lvAdLZf3hXMSqhWO', 'teacher', true)
+VALUES ('Dr. Preethi Salian K', 'preethi.salian@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
 ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
 
 INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
-SELECT id, 'EMP-002', 'ISE', 'Professor', 8, true FROM users WHERE email = 'ahmed.khan@university.edu'
-ON CONFLICT (user_id) DO UPDATE SET designation = 'Professor', capacity = 8, is_active = true;
+SELECT id, 'EMP-PSK', 'ISE', 'Associate Professor & Class Advisor', 15, true FROM users WHERE email = 'preethi.salian@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-PSK', department = 'ISE', designation = 'Associate Professor & Class Advisor', capacity = 15, is_active = true;
 
--- Seed Default Student: student@eduguardian.ai / student123
+-- 2. Dr. Ravi B (DCN Faculty)
 INSERT INTO users (full_name, email, password_hash, role, is_active)
-VALUES ('Alex Johnson', 'student@eduguardian.ai', '$2b$12$Okr.UwLokb3URnbGraNzNe/dVqbhw1IAyvYqoHeY463mcAXGVMDRa', 'student', true)
-ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name;
+VALUES ('Dr. Ravi B', 'ravi.b@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
 
-INSERT INTO students (user_id, usn, department, semester, section, enrollment_year, data_source)
-SELECT id, '1MS21IS001', 'ISE', 5, 'C', 2022, 'demo' FROM users WHERE email = 'student@eduguardian.ai'
-ON CONFLICT (user_id) DO UPDATE SET usn = '1MS21IS001', department = 'ISE', semester = 5, section = 'C';
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-RB', 'ISE', 'Professor', 10, true FROM users WHERE email = 'ravi.b@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-RB', department = 'ISE', designation = 'Professor', capacity = 10, is_active = true;
 
--- Seed Teacher Assignments
+-- 3. Dr. Ramesh G (ML Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Dr. Ramesh G', 'ramesh.g@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-RG', 'ISE', 'Professor', 10, true FROM users WHERE email = 'ramesh.g@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-RG', department = 'ISE', designation = 'Professor', capacity = 10, is_active = true;
+
+-- 4. Ms. Prathyakshini (OS Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Ms. Prathyakshini', 'prathyakshini@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-PR', 'ISE', 'Assistant Professor', 10, true FROM users WHERE email = 'prathyakshini@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-PR', department = 'ISE', designation = 'Assistant Professor', capacity = 10, is_active = true;
+
+-- 5. Mr. Krishnamoorthy C (MD / MERN Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Mr. Krishnamoorthy C', 'krishnamoorthy@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-KC', 'ISE', 'Assistant Professor', 8, true FROM users WHERE email = 'krishnamoorthy@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-KC', department = 'ISE', designation = 'Assistant Professor', capacity = 8, is_active = true;
+
+-- 6. Dr. Deepa (ESD Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Dr. Deepa', 'deepa@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-DS', 'ISE', 'Assistant Professor', 8, true FROM users WHERE email = 'deepa@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-DS', department = 'ISE', designation = 'Assistant Professor', capacity = 8, is_active = true;
+
+-- 7. Dr. Santhosh S (SCR Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Dr. Santhosh S', 'santhosh.s@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-SS', 'ISE', 'Assistant Professor', 8, true FROM users WHERE email = 'santhosh.s@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-SS', department = 'ISE', designation = 'Assistant Professor', capacity = 8, is_active = true;
+
+-- 8. Dr. Vasudeva (RM Faculty)
+INSERT INTO users (full_name, email, password_hash, role, is_active)
+VALUES ('Dr. Vasudeva', 'vasudeva@nitte.edu.in', '$2b$12$aizgSEhfyaL2eD/KUlvwmeETsPAbZbrJEvwwqYorv2iV.l2/t4342', 'teacher', true)
+ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+INSERT INTO teachers (user_id, employee_id, department, designation, capacity, is_active)
+SELECT id, 'EMP-VD', 'ISE', 'Professor', 10, true FROM users WHERE email = 'vasudeva@nitte.edu.in'
+ON CONFLICT (user_id) DO UPDATE SET employee_id = 'EMP-VD', department = 'ISE', designation = 'Professor', capacity = 10, is_active = true;
+
+-- Teacher Assignments for ISE Semester 5 Section C
+-- Class Advisor (Admin role)
 INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
-SELECT t.id, 'ISE', 5, 'C', NULL, true FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'teacher@example.com'
+SELECT t.id, 'ISE', 5, 'C', NULL, true FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'preethi.salian@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+-- Subject Roles
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'HU1011-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'preethi.salian@nitte.edu.in'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
-SELECT t.id, 'ISE', 5, 'C', 'IS3001-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'teacher@example.com'
+SELECT t.id, 'ISE', 5, 'C', 'IS3001-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'ravi.b@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'IS2002-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'ramesh.g@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'IS3101-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'prathyakshini@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'IS1604-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'krishnamoorthy@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'UM1003-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'deepa@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'HU1007-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'santhosh.s@nitte.edu.in'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO teacher_assignments (teacher_id, department, semester, section, subject_code, is_class_admin)
+SELECT t.id, 'ISE', 5, 'C', 'HU1010-1', false FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'vasudeva@nitte.edu.in'
 ON CONFLICT DO NOTHING;
 
 -- Seed Sample Assignment
 INSERT INTO assignments (department, semester, section, subject_code, created_by, assignment_name, max_marks, due_date, resource_name, resource_url)
 SELECT 'ISE', 5, 'C', 'IS3001-1', t.id, 'Network Layer Subnetting Assignment', 100.0, (CURRENT_DATE + INTERVAL '7 days')::date, 'Subnetting_Guide.pdf', 'http://localhost:5000/uploads/Subnetting_Guide.pdf'
-FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'teacher@example.com'
+FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'ravi.b@nitte.edu.in'
 LIMIT 1
 ON CONFLICT DO NOTHING;
+
+-- Seed Default Goals for Demo Student
+INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
+SELECT 1, s.id, 'Maintain 85% Attendance', 'Attendance', '85%', 66, 'in-progress', (CURRENT_DATE + INTERVAL '30 days')::date
+FROM students s WHERE s.usn = '1MS21IS001'
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
+(1, 1, 'Attend all DCN lectures this week (4/4)', true),
+(2, 1, 'Attend all ML Foundations lectures (3/3)', true),
+(3, 1, 'Check OS attendance record on portal by Friday', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
+SELECT 2, s.id, 'Complete All Coursework & Assignments', 'Assignment', '100%', 33, 'in-progress', (CURRENT_DATE + INTERVAL '20 days')::date
+FROM students s WHERE s.usn = '1MS21IS001'
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
+(4, 2, 'Submit Network Layer Subnetting Assignment in DCN', true),
+(5, 2, 'Complete ML Foundation Lab Exercise 3', false),
+(6, 2, 'Verify submission status with course mentor', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
+SELECT 3, s.id, 'Target 8.5+ SGPA in Semester 5', 'Academic', 'SGPA 8.5', 50, 'on-track', (CURRENT_DATE + INTERVAL '60 days')::date
+FROM students s WHERE s.usn = '1MS21IS001'
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
+(7, 3, 'Complete 2 hours of self-study on DCN routing protocols', true),
+(8, 3, 'Score 18+ in ML Internal Assessment 1', false)
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval(pg_get_serial_sequence('student_goals', 'id'), coalesce(max(id), 1)) FROM student_goals;
+SELECT setval(pg_get_serial_sequence('goal_milestones', 'id'), coalesce(max(id), 1)) FROM goal_milestones;
 
 -- ============================================================
 -- EDUGUARDIAN CHATBOT DATABASE SCHEMA

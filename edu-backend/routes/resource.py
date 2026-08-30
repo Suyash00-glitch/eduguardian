@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from db import get_db
 from controllers.resourceController import (
-    dispatch_resource,
+    dispatch_resource_with_file,
     get_student_resources,
     get_interventions_history
 )
@@ -19,19 +19,16 @@ router = APIRouter(
 )
 
 
-class ResourceRequest(BaseModel):
-    target_category: str
-    title: str
-    resource_url: str
-    description: Optional[str] = None
-    target_student_id: Optional[int] = None
-
-
 @router.post("/resource")
-def send_resource(
-    data: ResourceRequest,
+async def send_resource(
+    target_category: str = Form(...),
+    title: str = Form(...),
+    description: Optional[str] = Form(None),
+    resource_url: Optional[str] = Form(None),
+    target_student_id: Optional[int] = Form(None),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user=Depends(teacher_only)
+    current_user = Depends(teacher_only)
 ):
     allowed_categories = [
         "all",
@@ -47,35 +44,38 @@ def send_resource(
         "mentees"
     ]
 
-    target = data.target_category.lower().strip()
+    target = target_category.lower().strip()
 
     if target not in allowed_categories:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid target category '{data.target_category}'. Allowed: all, high, medium, low, specific_student, my_mentees."
+            detail=f"Invalid target category '{target_category}'. Allowed: all, high, medium, low, specific_student, my_mentees."
         )
 
-    count = dispatch_resource(
-        db,
-        current_user["user_id"],
-        target,
-        data.title,
-        data.resource_url,
-        data.description,
-        data.target_student_id
+    count, final_url, res_type = await dispatch_resource_with_file(
+        db=db,
+        teacher_user_id=current_user["user_id"],
+        target_category=target,
+        title=title,
+        resource_url=resource_url,
+        description=description,
+        target_student_id=target_student_id,
+        file=file
     )
 
     return {
         "success": True,
-        "message": f"Resource dispatched successfully to {count} student(s).",
-        "students_reached": count
+        "message": f"Resource ({res_type}) dispatched successfully to {count} student portal(s).",
+        "students_reached": count,
+        "resource_url": final_url,
+        "resource_type": res_type
     }
 
 
 @router.get("/resources")
 def get_resources(
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     return get_student_resources(
         db,
@@ -86,8 +86,8 @@ def get_resources(
 @router.get("/history")
 def get_history(
     db: Session = Depends(get_db),
-    current_user=Depends(teacher_only)
+    current_user = Depends(teacher_only)
 ):
     return {
         "history": get_interventions_history(db, current_user["user_id"])
-    }
+    }

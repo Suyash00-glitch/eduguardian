@@ -285,6 +285,66 @@ def _parse_profile_html(html: str) -> Dict[str, Any]:
     return result
 
 
+def _parse_attendance_data(raw: str) -> Optional[List[Dict[str, Any]]]:
+    if not raw or not raw.strip():
+        return None
+    
+    # 1. JSON Parsing
+    parsed = _json_safe(raw)
+    if parsed and isinstance(parsed, dict):
+        items = parsed.get("data") or parsed.get("body") or parsed.get("records") or parsed.get("attendance")
+        if isinstance(items, list) and len(items) > 0:
+            return items
+        if isinstance(items, dict):
+            return [items]
+        if str(parsed.get("error_code")) == "0" and len(parsed) > 2:
+            return [parsed]
+
+    # 2. HTML Table Parsing (Logisys / University Solutions app.php format)
+    if "<tr" in raw.lower() or "<table" in raw.lower():
+        rows = []
+        tr_matches = re.findall(r"<tr[^>]*>(.*?)</tr>", raw, re.DOTALL | re.IGNORECASE)
+        for tr in tr_matches:
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.DOTALL | re.IGNORECASE)
+            td_texts = [re.sub(r"<[^>]+>", "", td).strip() for td in tds]
+            if len(td_texts) >= 3:
+                # Filter out header row
+                if any(h in td_texts[0].lower() or (len(td_texts) > 1 and h in td_texts[1].lower()) for h in ["sl", "subject", "subcode", "code", "held"]):
+                    continue
+                
+                held = None
+                att = None
+                perc = None
+                sub_code = td_texts[1] if len(td_texts) > 1 and len(td_texts[1]) < 20 else td_texts[0]
+                sub_name = td_texts[2] if len(td_texts) > 2 else sub_code
+
+                nums = []
+                for col in td_texts:
+                    clean_col = col.replace("%", "").strip()
+                    try:
+                        nums.append(float(clean_col))
+                    except ValueError:
+                        pass
+                
+                if len(nums) >= 2:
+                    held = int(nums[0]) if nums[0] > 0 else None
+                    att = int(nums[1]) if len(nums) > 1 else None
+                    perc = nums[2] if len(nums) > 2 else (round(att / held * 100, 2) if (held and att is not None) else None)
+
+                if held is not None and att is not None:
+                    rows.append({
+                        "subject_code": sub_code,
+                        "subject_name": sub_name,
+                        "classes_held": held,
+                        "classes_attended": att,
+                        "percentage": perc if perc is not None else round(att / max(held, 1) * 100, 2)
+                    })
+        if rows:
+            return rows
+
+    return None
+
+
 def fetch_portal_student_data(
     mobile: str,
     cookies: Optional[Dict[str, str]] = None
@@ -307,42 +367,76 @@ def fetch_portal_student_data(
     real_usn = _pick(raw_profile, "strRegno", "strregno", "fregno", "FREGNO", "regno", "REGNO")
     real_name = _pick(raw_profile, "fname", "FNAME", "name", "NAME")
     univcode = _pick(raw_profile, "funivcode", "FUNIVCODE", "UNIVCODE", "univcode") or "049"
+    regno_param = real_usn or ""
 
     logger.info(
         "[PORTAL FETCH] Profile extracted: name='%s' usn='%s' univcode='%s'",
         real_name, real_usn, univcode
     )
 
-    # 2. Attendance
-    att_url = f"{APP_ENDPOINT}?a=viewAttendanceDetsummary&univcode={univcode}&date={today}"
-    att_status, att_raw = _do_get(opener, att_url)
+    # 2. Attendance (Multi-endpoint GET & POST + HTML table fallback)
+    att_endpoints_get = [
+        f"{APP_ENDPOINT}?a=viewAttendanceDetsummary&univcode={univcode}&date={today}",
+        f"{APP_ENDPOINT}?a=viewAttendanceDetsummary&univcode={univcode}",
+        f"{APP_ENDPOINT}?a=viewAttendanceDet&univcode={univcode}&regno={regno_param}",
+        f"{APP_ENDPOINT}?a=viewAttendanceDet&univcode={univcode}&date={today}",
+        f"{PORTAL_BASE_URL}/src/attendance.php?a=getAttendance&UNIVCODE={univcode}&REGNO={regno_param}",
+        f"{PORTAL_BASE_URL}/src/attendance.php?a=getAttendance&univcode={univcode}",
+        f"{PORTAL_BASE_URL}/src/attendance.php?a=getAttendanceDet&univcode={univcode}&regno={regno_param}",
+        f"{PORTAL_BASE_URL}/src/attendance_det.php?UNIVCODE={univcode}&REGNO={regno_param}",
+        f"{PORTAL_BASE_URL}/app.php?a=getAttendance&UNIVCODE={univcode}",
+        f"{PORTAL_BASE_URL}/src/att_summary.php?univcode={univcode}&regno={regno_param}",
+        f"{PORTAL_BASE_URL}/src/timetable_att.php?univcode={univcode}&regno={regno_param}",
+    ]
     raw_attendance = None
-    att_parsed = _json_safe(att_raw)
-    if att_parsed and str(att_parsed.get("error_code")) == "0" and att_parsed.get("data"):
-        raw_attendance = att_parsed["data"]
-        logger.info("[PORTAL FETCH] Attendance data returned by portal.")
-    else:
-        logger.info("[PORTAL FETCH] Attendance not available for current semester.")
+    for a_url in att_endpoints_get:
+        att_status, att_raw = _do_get(opener, a_url, timeout=10)
+        parsed_att = _parse_attendance_data(att_raw)
+        if parsed_att:
+            raw_attendance = parsed_att
+            logger.info("[PORTAL FETCH] Attendance data returned by GET %s (%d records).", a_url, len(parsed_att))
+            break
 
-    # 3. Historical Results Summary
-    regno_param = real_usn or ""
-    res_url = f"{RESULTS_ENDPOINT}?a=getResAll&UNIVCODE={univcode}&REGNO={regno_param}" if regno_param else f"{RESULTS_ENDPOINT}?a=getResAll"
-    res_status, res_raw = _do_get(opener, res_url)
-    logger.info("[PORTAL FETCH] GET results_new.php?a=getResAll -> HTTP %s (%d bytes)", res_status, len(res_raw))
+    if not raw_attendance:
+        att_endpoints_post = [
+            (f"{PORTAL_BASE_URL}/src/attendance.php", {"a": "getAttendance", "univcode": univcode, "regno": regno_param, "fregno": regno_param}),
+            (f"{APP_ENDPOINT}", {"a": "viewAttendanceDetsummary", "univcode": univcode, "date": today}),
+            (f"{APP_ENDPOINT}", {"a": "viewAttendanceDet", "univcode": univcode, "regno": regno_param}),
+            (f"{PORTAL_BASE_URL}/src/att_summary.php", {"univcode": univcode, "regno": regno_param}),
+        ]
+        for a_url, params in att_endpoints_post:
+            att_status, att_raw = _do_post(opener, a_url, params, timeout=10)
+            parsed_att = _parse_attendance_data(att_raw)
+            if parsed_att:
+                raw_attendance = parsed_att
+                logger.info("[PORTAL FETCH] Attendance data returned by POST %s (%d records).", a_url, len(parsed_att))
+                break
 
+    if not raw_attendance:
+        logger.info("[PORTAL FETCH] Attendance not published yet for current semester on portal.")
+
+    # 3. Historical Results Summary (Multi-endpoint fallback)
+    res_endpoints = [
+        f"{RESULTS_ENDPOINT}?a=getResAll&UNIVCODE={univcode}&REGNO={regno_param}" if regno_param else f"{RESULTS_ENDPOINT}?a=getResAll",
+        f"{RESULTS_ENDPOINT}?a=getResAll&funivcode={univcode}&fregno={regno_param}",
+        f"{RESULTS_ENDPOINT}?a=getResAll&REGNO={regno_param}",
+        f"{RESULTS_ENDPOINT}?a=getResAll",
+        f"{PORTAL_BASE_URL}/src/results.php?a=getResAll&UNIVCODE={univcode}&REGNO={regno_param}",
+        f"{OLD_RESULTS_ENDPOINT}?a=getOldResults&univcode={univcode}&regno={regno_param}",
+        f"{OLD_RESULTS_ENDPOINT}?a=getOldResults&univcode={univcode}",
+    ]
     raw_historical: List[Dict[str, Any]] = []
-    res_parsed = _json_safe(res_raw)
-
-    if res_parsed and str(res_parsed.get("error_code")) == "0" and isinstance(res_parsed.get("data"), list):
-        raw_historical = res_parsed["data"]
-        logger.info("[PORTAL FETCH] %d semester records found in results_new.php.", len(raw_historical))
-    else:
-        old_res_url = f"{OLD_RESULTS_ENDPOINT}?a=getOldResults&univcode={univcode}"
-        _, old_raw = _do_get(opener, old_res_url)
-        old_parsed = _json_safe(old_raw)
-        if old_parsed and str(old_parsed.get("error_code")) == "0" and isinstance(old_parsed.get("data"), list):
-            raw_historical = old_parsed["data"]
-            logger.info("[PORTAL FETCH] %d semester records found in old_results.php.", len(raw_historical))
+    for r_url in res_endpoints:
+        res_status, res_raw = _do_get(opener, r_url, timeout=10)
+        res_parsed = _json_safe(res_raw)
+        if res_parsed and str(res_parsed.get("error_code")) == "0" and isinstance(res_parsed.get("data"), list) and len(res_parsed["data"]) > 0:
+            raw_historical = res_parsed["data"]
+            logger.info("[PORTAL FETCH] %d semester records found in %s.", len(raw_historical), r_url)
+            break
+        elif res_parsed and str(res_parsed.get("error_code")) == "0" and isinstance(res_parsed.get("body"), list) and len(res_parsed["body"]) > 0:
+            raw_historical = res_parsed["body"]
+            logger.info("[PORTAL FETCH] %d semester records found in body of %s.", len(raw_historical), r_url)
+            break
 
     # 4. Detailed Marks Card for each Historical Semester
     detailed_history: List[Dict[str, Any]] = []
@@ -491,69 +585,115 @@ def normalize_student_context(
     # Attendance
     attendance_data: Dict[str, Any] = {"value": None, "status": "not_available", "records": []}
     if attendance:
-        records = attendance if isinstance(attendance, list) else [attendance]
-        if isinstance(attendance, list) and attendance:
-            def _iv(item, *ks) -> int:
-                for k in ks:
-                    v = item.get(k)
-                    if v is not None:
-                        try: return int(str(v).strip() or "0")
-                        except: pass
-                return 0
-            held     = sum(_iv(r, "HELD","held","FCLSHELD","fclsheld","classes_held","TOTAL") for r in records)
-            attended = sum(_iv(r, "ATTENDED","attended","FCLSATT","fclsatt","classes_attended","PRESENT") for r in records)
-            if held > 0:
-                attendance_data = {
-                    "value": round(attended / held * 100, 2),
-                    "status": "available",
-                    "classes_held": held,
-                    "classes_attended": attended,
-                    "records": records,
-                }
-            else:
-                attendance_data = {
-                    "value": None,
-                    "status": "not_available",
-                    "note": "Current semester attendance records are pending faculty upload.",
-                    "records": records,
-                }
-        elif isinstance(attendance, dict):
-            pv = _pick_float(attendance, "PERCENTAGE","percentage","FPERCENTAGE","fpercentage")
-            if pv is not None:
-                attendance_data = {"value": pv, "status": "available", "records": [attendance]}
+        raw_recs = attendance if isinstance(attendance, list) else [attendance]
+        def _iv(item, *ks) -> int:
+            for k in ks:
+                v = item.get(k)
+                if v is not None:
+                    try:
+                        return int(float(str(v).strip() or "0"))
+                    except:
+                        pass
+            return 0
+
+        parsed_records = []
+        for r in raw_recs:
+            if not isinstance(r, dict):
+                continue
+            raw_subcode = _pick(r, "fsubcode", "FSUBCODE", "subject_code", "subcode", "code")
+            raw_subname = _pick(r, "fsubname", "FSUBNAME", "subject", "subject_name", "subname", "name") or raw_subcode
+
+            # Extract subject code from "Data Communication and Networking - IS3001-1 " if subcode is an index like "E0010"
+            sub_code = raw_subcode
+            sub_name = raw_subname
+            if raw_subname and " - " in raw_subname:
+                parts = raw_subname.rsplit(" - ", 1)
+                if len(parts) == 2 and any(c.isdigit() for c in parts[1]):
+                    sub_code = parts[1].strip()
+                    sub_name = parts[0].strip()
+
+            held_val = _iv(r, "conducted", "CONDUCTED", "HELD", "held", "FCLSHELD", "fclsheld", "classes_held", "TOTAL", "mthheld", "classesHeld")
+            att_val = _iv(r, "attended", "ATTENDED", "FCLSATT", "fclsatt", "classes_attended", "PRESENT", "mthatt", "classesAttended")
+            perc_val = _pick_float(r, "percentage", "PERCENTAGE", "fpercentage", "FPERCENTAGE")
+            if perc_val is None and held_val > 0:
+                perc_val = round((att_val / held_val) * 100, 2)
+            elif perc_val is None:
+                perc_val = 100.0 if (att_val > 0 and held_val == 0) else 0.0
+
+            parsed_records.append({
+                "subject_code": sub_code or raw_subcode,
+                "subject_name": sub_name or raw_subname,
+                "raw_subcode": raw_subcode,
+                "classes_held": held_val,
+                "classes_attended": att_val,
+                "conducted": held_val,
+                "attended": att_val,
+                "percentage": perc_val,
+            })
+
+        total_held = sum(r["classes_held"] for r in parsed_records)
+        total_att = sum(r["classes_attended"] for r in parsed_records)
+
+        if total_held > 0:
+            overall_pct = round((total_att / total_held) * 100, 2)
+            attendance_data = {
+                "value": overall_pct,
+                "status": "available",
+                "classes_held": total_held,
+                "classes_attended": total_att,
+                "records": parsed_records,
+            }
+        elif parsed_records:
+            attendance_data = {
+                "value": 100.0 if total_att > 0 else 0.0,
+                "status": "available",
+                "classes_held": total_held,
+                "classes_attended": total_att,
+                "records": parsed_records,
+            }
+        else:
+            attendance_data = {
+                "value": None,
+                "status": "not_available",
+                "note": "Current semester attendance records are pending faculty upload.",
+                "records": [],
+            }
 
     assessments_data: Dict[str, Any] = {"value": None, "status": "not_available", "records": []}
     assignments_data: Dict[str, Any] = {"value": None, "status": "not_available", "missed_count": 0, "records": []}
     lms_data:         Dict[str, Any] = {"value": None, "status": "not_available", "study_minutes": 0}
 
-    # Historical Semester Results & Marks Card Parsing
+    # 4. Historical Semester Results & Marks Card Parsing
     normalized_history = []
     all_sgpas: List[Tuple[int, float]] = []
     all_cgpas: List[Tuple[int, float]] = []
-    latest_cgpa: Optional[float] = None
     total_credits_earned = 0.0
-    arrears_count = 0
-    failed_subjects_history = []
     semesters_dict: Dict[str, Any] = {}
 
-    for idx, item in enumerate(historical or []):
+    # Reverse list if given in newest-first order to process chronologically for backlog clearing
+    raw_hist_list = historical or []
+
+    for idx, item in enumerate(raw_hist_list):
         if not isinstance(item, dict):
             continue
 
-        raw_exam_name = _pick(item, "examname", "EXAMNAME", "fexamname", "FEXAMNAME", "FRESEXAMDATE") or ""
-        # Clean literal <br> tags from examname
+        raw_exam_name = _pick(item, "examname", "EXAMNAME", "fexamname", "FEXAMNAME", "FRESEXAMDATE", "exam_name", "display_label", "examTitle") or ""
         clean_exam_name = re.sub(r"<br\s*/?>", " — ", raw_exam_name, flags=re.IGNORECASE).strip()
 
-        res_date  = _pick(item, "resultdate", "RESULTDATE", "fresdate", "FRESDATE")
-        exam_date = _pick(item, "examdate", "EXAMDATE", "FRESEXAMDATE")
-        sem_id    = _pick(item, "year", "YEAR", "fexamno", "FEXAMNO", "examno", "EXAMNO", "fsem", "semester") or str(idx + 1)
+        res_date  = _pick(item, "resultdate", "RESULTDATE", "fresdate", "FRESDATE", "result_date")
+        exam_date = _pick(item, "examdate", "EXAMDATE", "FRESEXAMDATE", "exam_date")
+        sem_id    = _pick(item, "year", "YEAR", "fexamno", "FEXAMNO", "examno", "EXAMNO", "fsem", "semester", "semester_number") or str(idx + 1)
         sgpa      = _pick_float(item, "sgpa", "SGPA", "fsgpa", "FSGPA")
         cgpa      = _pick_float(item, "cgpa", "CGPA", "fcgpa", "FCGPA")
         result    = _pick(item, "class", "CLASS", "fresult", "FRESULT", "result", "RESULT", "remarks", "status")
 
-        # Derive semester number (1 to 8)
+        # Detect Summer Semester (Make-up / Supplementary exam)
+        is_summer = False
+        if item.get("is_summer") or "summer" in clean_exam_name.lower() or (exam_date and "summer" in exam_date.lower()):
+            is_summer = True
+
         sem_num = None
-        if clean_exam_name:
+        if not is_summer and clean_exam_name:
             sem_match = re.search(r"(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|1st|2nd|3rd|4th|5th|6th|7th|8th| [1-8] )", clean_exam_name, re.IGNORECASE)
             if sem_match:
                 ord_map = {
@@ -562,16 +702,29 @@ def normalize_student_context(
                     "fifth": 5, "5th": 5, "sixth": 6, "6th": 6,
                     "seventh": 7, "7th": 7, "eighth": 8, "8th": 8
                 }
-                w = sem_match.group(1).lower()
+                w = sem_match.group(1).lower().strip()
                 sem_num = ord_map.get(w, int(w) if w.isdigit() else None)
 
-        if sem_num is None:
-            sem_num = len(historical) - idx if len(historical) >= idx else idx + 1
+        if not is_summer and sem_num is None:
+            # Fallback for regular semester
+            sem_num = len(raw_hist_list) - idx if len(raw_hist_list) >= idx else idx + 1
 
-        if sem_num and sgpa is not None:
-            all_sgpas.append((sem_num, sgpa))
-        if sem_num and cgpa is not None:
-            all_cgpas.append((sem_num, cgpa))
+        if is_summer:
+            clean_year_label = exam_date or "Supplementary"
+            display_sem_label = f"Summer Semester ({clean_year_label})"
+            short_title = f"Summer Sem ({clean_year_label})"
+            semester_type = "summer"
+        else:
+            display_sem_label = f"Semester {sem_num}"
+            short_title = f"Semester {sem_num}"
+            semester_type = "regular"
+
+        # Order key for chronological sorting (raw_hist_list is ordered newest to oldest)
+        sort_key = len(raw_hist_list) - idx
+        if sgpa is not None:
+            all_sgpas.append((sort_key, sgpa))
+        if cgpa is not None:
+            all_cgpas.append((sort_key, cgpa))
 
         # Parse detailed subject marks
         raw_subj_list = item.get("subject_results") or item.get("res") or item.get("results") or []
@@ -583,14 +736,25 @@ def normalize_student_context(
         for s in raw_subj_list:
             if not isinstance(s, dict):
                 continue
-            sub_code  = _pick(s, "fsubcode", "FSUBCODE", "SUBCODE", "subcode", "code")
-            sub_name  = _pick(s, "subject", "fsubname", "FSUBNAME", "SUBNAME", "subname", "name")
-            int_marks = _pick_float(s, "ia_exam", "fintmarks", "FTHINT", "fthint", "INTMARKS", "ia")
-            ext_marks = _pick_float(s, "uni_exam", "fextmarks", "FTHEXT", "fthext", "EXTMARKS", "external")
-            tot_marks = _pick_float(s, "thtot", "FTOTMARKS", "ftotmarks", "mthprue", "MARKS", "marks", "totmarks")
+            sub_code  = _pick(s, "fsubcode", "FSUBCODE", "SUBCODE", "subcode", "code", "subject_code")
+            raw_subname = _pick(s, "subject", "fsubname", "FSUBNAME", "SUBNAME", "subname", "name", "subject_name")
+            sub_name  = raw_subname
+
+            if raw_subname and " - " in raw_subname:
+                parts = raw_subname.split(" - ", 1)
+                if len(parts) == 2:
+                    if not sub_code and any(c.isdigit() for c in parts[0]):
+                        sub_code = parts[0].strip()
+                        sub_name = parts[1].strip()
+                    elif sub_code:
+                        sub_name = parts[1].strip()
+
+            int_marks = _pick_float(s, "ia_exam", "fintmarks", "FTHINT", "fthint", "INTMARKS", "ia", "internal_marks")
+            ext_marks = _pick_float(s, "uni_exam", "fextmarks", "FTHEXT", "fthext", "EXTMARKS", "external", "external_marks")
+            tot_marks = _pick_float(s, "thtot", "FTOTMARKS", "ftotmarks", "mthprue", "MARKS", "marks", "totmarks", "marks_obtained")
             max_m     = _pick_float(s, "FMAXMARKS", "fmaxmarks", "fsmaxmarks", "MAXMARKS", "max_marks", "MAX")
             grade     = _pick(s, "FGRADE", "fgrade", "GRADE", "grade")
-            gp        = _pick_float(s, "FGP", "fgp", "FGRADEPOINT", "gradepoint")
+            gp        = _pick_float(s, "FGP", "fgp", "FGRADEPOINT", "gradepoint", "grade_point")
             credits_v = _pick_float(s, "FCREDITS", "fcredits", "CREDITS", "credits")
             sub_res   = _pick(s, "result", "remarks", "RESULT", "FRESULT", "fresult", "status")
 
@@ -608,16 +772,6 @@ def normalize_student_context(
             elif grade and grade.upper() in ("F", "AB", "FAIL"):
                 is_fail = True
 
-            if is_fail:
-                arrears_count += 1
-                failed_subjects_history.append({
-                    "semester": str(sem_num),
-                    "subject_code": sub_code,
-                    "subject_name": sub_name,
-                    "grade": grade,
-                    "result": sub_res
-                })
-
             parsed_subjects.append({
                 "subject_code":   sub_code,
                 "subject_name":   sub_name,
@@ -629,14 +783,17 @@ def normalize_student_context(
                 "grade_point":    gp,
                 "credits":        credits_v,
                 "result":         sub_res or ("PASS" if not is_fail else "FAIL"),
+                "is_fail":        is_fail,
             })
-
-        display_sem_label = str(sem_num) if sem_num else str(sem_id)
 
         sem_record = {
             "semester":        display_sem_label,
             "semester_number": sem_num,
-            "exam_name":       clean_exam_name or f"Semester {display_sem_label} Examination",
+            "is_summer":       is_summer,
+            "semester_type":   semester_type,
+            "display_label":   display_sem_label,
+            "short_title":     short_title,
+            "exam_name":       clean_exam_name or display_sem_label,
             "exam_date":       exam_date,
             "result_date":     res_date,
             "sgpa":            sgpa,
@@ -650,10 +807,63 @@ def normalize_student_context(
         normalized_history.append(sem_record)
         semesters_dict[display_sem_label] = sem_record
 
-    # Sort descending by semester_number (Semester 4, 3, 2, 1)
-    normalized_history.sort(key=lambda x: x.get("semester_number") or 0, reverse=True)
+    # Accurate Backlog & Arrears Resolution across Regular + Summer Exams
+    subject_status_map: Dict[str, Dict[str, Any]] = {}
+    chronological_exams = list(reversed(normalized_history))
+
+    for exam in chronological_exams:
+        exam_name_lbl = exam.get("display_label") or exam.get("exam_name") or "Semester Exam"
+        for sub in exam.get("subject_results", []):
+            code = sub.get("subject_code")
+            subj_title = sub.get("subject_name") or code
+            is_failed = sub.get("is_fail", False)
+            if not code:
+                continue
+
+            if is_failed:
+                subject_status_map[code] = {
+                    "subject_code": code,
+                    "subject_name": subj_title,
+                    "status": "FAILED",
+                    "failed_in": exam_name_lbl,
+                    "grade": sub.get("grade"),
+                }
+            else:
+                was_prior_fail = (code in subject_status_map and subject_status_map[code]["status"] == "FAILED")
+                subject_status_map[code] = {
+                    "subject_code": code,
+                    "subject_name": subj_title,
+                    "status": "PASSED",
+                    "cleared_in": exam_name_lbl,
+                    "grade": sub.get("grade"),
+                    "was_cleared": was_prior_fail,
+                }
+
+    active_backlogs = [v for v in subject_status_map.values() if v["status"] == "FAILED"]
+    cleared_backlogs = [v for v in subject_status_map.values() if v.get("was_cleared")]
+    arrears_count = len(active_backlogs)
+
+    # Calculate student's true current semester
+    regular_sem_nums = [s.get("semester_number") for s in normalized_history if s.get("semester_number") is not None]
+    max_regular_sem = max(regular_sem_nums) if regular_sem_nums else 0
+
+    if semester is None:
+        if explicit_sem:
+            try:
+                semester = int(str(explicit_sem).strip())
+            except:
+                semester = max_regular_sem + 1 if max_regular_sem > 0 else 5
+        elif max_regular_sem > 0:
+            semester = max_regular_sem + 1
+        else:
+            semester = 5
 
     # Calculate SGPA Trend & Latest CGPA
+    latest_cgpa = None
+    if all_cgpas:
+        all_cgpas.sort(key=lambda x: x[0])
+        latest_cgpa = all_cgpas[-1][1]
+
     sgpa_trend = "insufficient_data"
     latest_sgpa = None
     if len(all_sgpas) >= 2:
@@ -664,26 +874,26 @@ def normalize_student_context(
         if diff >= 0.25:
             sgpa_trend = "improving"
         elif diff <= -0.25:
-            sgpa_trend = "declining"
+            if (latest_sgpa and latest_sgpa >= 8.5) or (latest_cgpa and latest_cgpa >= 8.5):
+                sgpa_trend = "stable"
+            else:
+                sgpa_trend = "declining"
         else:
             sgpa_trend = "stable"
     elif len(all_sgpas) == 1:
         latest_sgpa = all_sgpas[0][1]
         sgpa_trend = "stable"
 
-    latest_cgpa = None
-    if all_cgpas:
-        all_cgpas.sort(key=lambda x: x[0])
-        latest_cgpa = all_cgpas[-1][1]
-
     academic_performance = {
         "latest_sgpa": latest_sgpa,
         "cgpa": latest_cgpa,
         "sgpa_trend": sgpa_trend,
-        "total_semesters_completed": len(normalized_history),
+        "total_semesters_completed": len([s for s in normalized_history if not s.get("is_summer")]),
         "total_credits_earned": round(total_credits_earned, 1) if total_credits_earned > 0 else None,
         "arrears_count": arrears_count,
-        "failed_subjects_history": failed_subjects_history,
+        "active_backlogs": active_backlogs,
+        "cleared_backlogs": cleared_backlogs,
+        "failed_subjects_history": active_backlogs,
         "semesters": semesters_dict,
     }
 

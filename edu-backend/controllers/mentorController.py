@@ -377,24 +377,22 @@ def get_my_mentees(db: Session, user_id: int):
         uid = row["student_user_id"]
         is_portal = (row["data_source"] == "student_portal") or (row["usn"] in ("NNM24IS127", "NNM24IS172"))
 
-        if uid in _PORTAL_CONTEXT_CACHE and is_portal:
-            ctx = _PORTAL_CONTEXT_CACHE[uid]
-            risk_eval = ctx.get("risk_evaluation") or calculate_academic_risk(ctx)
+        ctx = _PORTAL_CONTEXT_CACHE.get(uid)
+        if not ctx and is_portal:
+            try:
+                from controllers.portalController import get_authenticated_student_context
+                ctx = get_authenticated_student_context(db, uid)
+            except Exception:
+                ctx = None
+
+        if ctx and is_portal:
+            risk_eval = calculate_academic_risk(ctx)
             hist_perf = ctx.get("historical_academic_performance", {})
             r_level = (risk_eval.get("risk_level") or "low").upper()
             cgpa = hist_perf.get("cgpa")
             latest_sgpa = hist_perf.get("latest_sgpa")
             backlogs = hist_perf.get("arrears_count", 0)
             reason = (risk_eval.get("factors") or ["Strong academic trajectory"])[0]
-        elif is_portal:
-            if row["usn"] == "NNM24IS172":
-                cgpa, latest_sgpa, backlogs = 5.24, 4.50, 4
-                r_level = "HIGH"
-                reason = "Low cumulative academic performance (CGPA: 5.24) and 4 backlogs"
-            else:
-                cgpa, latest_sgpa, backlogs = 8.45, 8.67, 0
-                r_level = "LOW"
-                reason = "Strong academic performance (CGPA: 8.45)"
         else:
             # Demo student
             r_level = (row["db_risk_level"] or "LOW").upper()

@@ -193,7 +193,6 @@ export default function MentorManagement() {
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
         <div>
-          <span className="dashboard-eyebrow">FACULTY ADMINISTRATION</span>
           <h2>Mentor Management</h2>
           <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", marginTop: "4px" }}>
             Add, update, and manage faculty mentors, mentee quotas, and availability.
@@ -206,15 +205,15 @@ export default function MentorManagement() {
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            background: "#6366f1",
-            color: "#fff",
+            background: "var(--primary)",
+            color: "#03251c",
             border: "none",
             borderRadius: "8px",
             padding: "10px 18px",
             fontSize: "13px",
-            fontWeight: 600,
+            fontWeight: 700,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(99, 102, 241, 0.4)"
+            boxShadow: "0 2px 8px rgba(6, 214, 160, 0.3)"
           }}
         >
           <UserPlus size={16} />
@@ -340,7 +339,7 @@ export default function MentorManagement() {
                       <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#fff", margin: 0 }}>
                         {m.name || m.full_name}
                       </h3>
-                      <div style={{ fontSize: "12px", color: "#a5b4fc", marginTop: "2px", fontWeight: 500 }}>
+                      <div style={{ fontSize: "12px", color: "var(--primary)", marginTop: "2px", fontWeight: 500 }}>
                         {m.designation || "Assistant Professor"} · {m.department}
                       </div>
                     </div>
@@ -529,16 +528,16 @@ export default function MentorManagement() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Sarah Jenkins"
+                  placeholder="e.g. Dr. Preethi Salian K"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   style={{
                     width: "100%",
-                    background: "#1e293b",
-                    border: "1.5px solid #334155",
+                    background: "var(--surface-soft)",
+                    border: "1.5px solid var(--border)",
                     borderRadius: "8px",
                     padding: "10px 12px",
-                    color: "#f1f5f9",
+                    color: "var(--text)",
                     fontSize: "13px",
                     boxSizing: "border-box"
                   }}
@@ -547,7 +546,7 @@ export default function MentorManagement() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                     Employee ID *
                   </label>
                   <input
@@ -558,11 +557,11 @@ export default function MentorManagement() {
                     onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                     style={{
                       width: "100%",
-                      background: "#1e293b",
-                      border: "1.5px solid #334155",
+                      background: "var(--surface-soft)",
+                      border: "1.5px solid var(--border)",
                       borderRadius: "8px",
                       padding: "10px 12px",
-                      color: "#f1f5f9",
+                      color: "var(--text)",
                       fontSize: "13px",
                       boxSizing: "border-box"
                     }}
@@ -570,7 +569,7 @@ export default function MentorManagement() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                     Department *
                   </label>
                   <select
@@ -578,11 +577,11 @@ export default function MentorManagement() {
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     style={{
                       width: "100%",
-                      background: "#1e293b",
-                      border: "1.5px solid #334155",
+                      background: "var(--surface-soft)",
+                      border: "1.5px solid var(--border)",
                       borderRadius: "8px",
                       padding: "10px 12px",
-                      color: "#f1f5f9",
+                      color: "var(--text)",
                       fontSize: "13px",
                       boxSizing: "border-box"
                     }}
@@ -596,7 +595,7 @@ export default function MentorManagement() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                   Email Address *
                 </label>
                 <input
@@ -607,11 +606,11 @@ export default function MentorManagement() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   style={{
                     width: "100%",
-                    background: "#1e293b",
-                    border: "1.5px solid #334155",
+                    background: "var(--surface-soft)",
+                    border: "1.5px solid var(--border)",
                     borderRadius: "8px",
                     padding: "10px 12px",
-                    color: "#f1f5f9",
+                    color: "var(--text)",
                     fontSize: "13px",
                     boxSizing: "border-box"
                   }}
@@ -620,7 +619,7 @@ export default function MentorManagement() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                     Designation
                   </label>
                   <select
@@ -628,11 +627,11 @@ export default function MentorManagement() {
                     onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                     style={{
                       width: "100%",
-                      background: "#1e293b",
-                      border: "1.5px solid #334155",
+                      background: "var(--surface-soft)",
+                      border: "1.5px solid var(--border)",
                       borderRadius: "8px",
                       padding: "10px 12px",
-                      color: "#f1f5f9",
+                      color: "var(--text)",
                       fontSize: "13px",
                       boxSizing: "border-box"
                     }}
@@ -645,7 +644,7 @@ export default function MentorManagement() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                     Max Mentees / Capacity
                   </label>
                   <input
@@ -656,11 +655,11 @@ export default function MentorManagement() {
                     onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 5 })}
                     style={{
                       width: "100%",
-                      background: "#1e293b",
-                      border: "1.5px solid #334155",
+                      background: "var(--surface-soft)",
+                      border: "1.5px solid var(--border)",
                       borderRadius: "8px",
                       padding: "10px 12px",
-                      color: "#f1f5f9",
+                      color: "var(--text)",
                       fontSize: "13px",
                       boxSizing: "border-box"
                     }}
@@ -669,7 +668,7 @@ export default function MentorManagement() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                   Phone Number (Optional)
                 </label>
                 <input
@@ -679,11 +678,11 @@ export default function MentorManagement() {
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   style={{
                     width: "100%",
-                    background: "#1e293b",
-                    border: "1.5px solid #334155",
+                    background: "var(--surface-soft)",
+                    border: "1.5px solid var(--border)",
                     borderRadius: "8px",
                     padding: "10px 12px",
-                    color: "#f1f5f9",
+                    color: "var(--text)",
                     fontSize: "13px",
                     boxSizing: "border-box"
                   }}
@@ -725,13 +724,13 @@ export default function MentorManagement() {
                   disabled={formSubmitting}
                   style={{
                     flex: 2,
-                    background: "#6366f1",
+                    background: "var(--primary)",
                     border: "none",
-                    color: "#fff",
+                    color: "#03251c",
                     borderRadius: "8px",
                     padding: "10px",
                     fontSize: "13px",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer"
                   }}
                 >

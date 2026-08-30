@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from sqlalchemy.orm import Session
 from datetime import date
+from pydantic import BaseModel
 
 from db import get_db
 from controllers.assignmentController import (
     get_assignments,
     create_assignment,
     get_student_assignments,
-    get_student_assignment,
+    get_one_student_assignment,
     submit_student_assignment,
-      get_teacher_assignment
+    get_teacher_assignment,
+    grade_student_submission,
 )
 from middlewares.teacherOnly import teacher_only
 from middlewares.auth import get_current_user
@@ -19,6 +21,13 @@ router = APIRouter(
     prefix="/api/assignments",
     tags=["assignments"]
 )
+
+
+class GradeSubmissionPayload(BaseModel):
+    assignment_id: int
+    student_id: int
+    marks_obtained: float
+    feedback: str = ""
 
 
 @router.get("")
@@ -48,9 +57,7 @@ async def add_assignment(
     assignment_name: str = Form(...),
     max_marks: float = Form(...),
     due_date: date = Form(...),
-
     resource: UploadFile | None = File(None),
-
     db: Session = Depends(get_db),
     current_user=Depends(teacher_only),
 ):
@@ -76,7 +83,7 @@ def list_student_assignments(
     if current_user["role"] != "student":
         raise HTTPException(
             status_code=403,
-            detail="student access required"
+            detail="Student access required"
         )
 
     return get_student_assignments(
@@ -84,8 +91,9 @@ def list_student_assignments(
         current_user["user_id"]
     )
 
+
 @router.get("/student/{assignment_id}")
-def get_one_student_assignment(
+def get_one_student_assignment_route(
     assignment_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -93,14 +101,15 @@ def get_one_student_assignment(
     if current_user["role"] != "student":
         raise HTTPException(
             status_code=403,
-            detail="student access required"
+            detail="Student access required"
         )
 
-    return get_student_assignment(
-        db,
-        current_user["user_id"],
-        assignment_id
+    return get_one_student_assignment(
+        db=db,
+        user_id=current_user["user_id"],
+        assignment_id=assignment_id
     )
+
 
 @router.post("/student/{assignment_id}/submit")
 async def submit_assignment(
@@ -112,7 +121,7 @@ async def submit_assignment(
     if current_user["role"] != "student":
         raise HTTPException(
             status_code=403,
-            detail="student access required"
+            detail="Student access required"
         )
 
     return await submit_student_assignment(
@@ -122,8 +131,9 @@ async def submit_assignment(
         file=file
     )
 
+
 @router.get("/teacher/{assignment_id}")
-def get_teacher_assignment(
+def get_teacher_assignment_route(
     assignment_id: int,
     page: int = 1,
     page_size: int = 10,
@@ -131,11 +141,27 @@ def get_teacher_assignment(
     db: Session = Depends(get_db),
     current_user=Depends(teacher_only),
 ):
-    return get_student_assignment(
+    return get_teacher_assignment(
         db=db,
         user_id=current_user["user_id"],
         assignment_id=assignment_id,
         page=page,
         page_size=page_size,
         search=search
+    )
+
+
+@router.post("/grade")
+def grade_submission_route(
+    payload: GradeSubmissionPayload,
+    db: Session = Depends(get_db),
+    current_user=Depends(teacher_only),
+):
+    return grade_student_submission(
+        db=db,
+        user_id=current_user["user_id"],
+        assignment_id=payload.assignment_id,
+        student_id=payload.student_id,
+        marks_obtained=payload.marks_obtained,
+        feedback=payload.feedback
     )

@@ -75,17 +75,24 @@ def get_student_roster(
         uid = row["user_id"]
         is_portal_student = (row["data_source"] == "student_portal") or (row["usn"] in ("NNM24IS127", "NNM24IS172"))
 
-        # If student has a live portal session with historical performance
-        if uid in _PORTAL_CONTEXT_CACHE and is_portal_student:
-            ctx = _PORTAL_CONTEXT_CACHE[uid]
-            risk_eval = ctx.get("risk_evaluation") or calculate_academic_risk(ctx)
+        # Fetch live or database student context
+        ctx = _PORTAL_CONTEXT_CACHE.get(uid)
+        if not ctx and is_portal_student:
+            try:
+                from controllers.portalController import get_authenticated_student_context
+                ctx = get_authenticated_student_context(db, uid)
+            except Exception:
+                ctx = None
+
+        if ctx and is_portal_student:
+            risk_eval = calculate_academic_risk(ctx)
             hist_perf = ctx.get("historical_academic_performance", {})
             att = ctx.get("attendance", {})
             
             r_level = (risk_eval.get("risk_level") or "low").lower()
             r_score = risk_eval.get("risk_score", 15.0)
             confidence = risk_eval.get("confidence", "low")
-            r_basis = risk_eval.get("risk_basis", "historical_academic_performance")
+            r_basis = risk_eval.get("risk_basis", "predictive_multivariate")
             factors = risk_eval.get("factors", [])
             rec_prob = risk_eval.get("recovery_probability", 85.0)
             
@@ -96,40 +103,6 @@ def get_student_roster(
             att_val = att.get("value") if att.get("status") == "available" else None
             att_status = "published" if att.get("status") == "available" and att_val is not None else "pending"
             data_src = "student_portal"
-        elif is_portal_student:
-            data_src = "student_portal"
-            if row["usn"] == "NNM24IS172" or "prayag" in (row["full_name"] or "").lower():
-                r_level = "high"
-                r_score = 95.0
-                confidence = "low"
-                r_basis = "historical_academic_performance"
-                factors = [
-                    "Low cumulative academic performance (CGPA: 5.24)",
-                    "Latest semester SGPA: 4.50",
-                    "4 historical backlog/arrear record(s) detected"
-                ]
-                cgpa = 5.24
-                latest_sgpa = 4.50
-                backlogs = 4
-                rec_prob = 35.0
-            else:
-                # Mohammed Ajmal
-                r_level = "low"
-                r_score = 7.0
-                confidence = "low"
-                r_basis = "historical_academic_performance"
-                factors = [
-                    "Strong academic performance (CGPA: 8.45)",
-                    "Latest semester SGPA: 8.67",
-                    "Improving semester performance trajectory"
-                ]
-                cgpa = 8.45
-                latest_sgpa = 8.67
-                backlogs = 0
-                rec_prob = 93.0
-            
-            att_val = None
-            att_status = "pending"
         else:
             # Demo student
             data_src = "demo"

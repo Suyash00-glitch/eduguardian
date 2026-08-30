@@ -43,18 +43,21 @@ def get_teacher_dashboard_summary(db: Session, department: str, semester: int, s
 
     for st in students:
         uid = st["user_id"]
-        if uid in _PORTAL_CONTEXT_CACHE:
-            ctx = _PORTAL_CONTEXT_CACHE[uid]
-            risk_eval = ctx.get("risk_evaluation") or calculate_academic_risk(ctx)
+        ctx = _PORTAL_CONTEXT_CACHE.get(uid)
+        if not ctx and (st["data_source"] == "student_portal" or st["usn"] in ("NNM24IS127", "NNM24IS172")):
+            try:
+                from controllers.portalController import get_authenticated_student_context
+                ctx = get_authenticated_student_context(db, uid)
+            except Exception:
+                ctx = None
+
+        if ctx:
+            risk_eval = calculate_academic_risk(ctx)
             risk = (risk_eval.get("risk_level") or "low").lower()
-            reason = risk_eval.get("support_signal") or "Evaluated based on historical performance"
+            reason = risk_eval.get("support_signal") or "Evaluated based on predictive academic model"
         else:
             risk = (st["db_risk"] or "low").lower()
-            if st["usn"] == "NNM24IS172":
-                risk = "high"
-                reason = "Low cumulative performance & backlogs (CGPA: 5.24, 4 backlogs)"
-            else:
-                reason = st["db_reason"] or "Academic progress on track"
+            reason = st["db_reason"] or "Academic progress on track"
 
         if risk == "high":
             high_risk_count += 1

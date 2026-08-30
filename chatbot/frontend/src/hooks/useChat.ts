@@ -122,6 +122,11 @@ export function useChat() {
                 }
                 return m;
               });
+              if (meta.study_plan && typeof window !== "undefined" && window.parent) {
+                try {
+                  window.parent.postMessage({ type: "STUDY_PLAN_GENERATED", plan: meta.study_plan }, "*");
+                } catch {}
+              }
               return {
                 ...prev,
                 conversationId: meta.conversation_id || prev.conversationId,
@@ -153,6 +158,11 @@ export function useChat() {
           conversation_id: conversationIdRef.current ?? undefined,
         });
         conversationIdRef.current = response.conversation_id;
+        if (response.study_plan && typeof window !== "undefined" && window.parent) {
+          try {
+            window.parent.postMessage({ type: "STUDY_PLAN_GENERATED", plan: response.study_plan }, "*");
+          } catch {}
+        }
         setState(prev => ({
           ...prev,
           conversationId: response.conversation_id,

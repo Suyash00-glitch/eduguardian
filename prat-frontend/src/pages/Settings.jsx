@@ -12,11 +12,8 @@ function Settings() {
 
       <div className="settings-header">
         <div>
-          <span className="dashboard-eyebrow">ACCOUNT</span>
-
-          <h2>Settings</h2>
-
-          <p>Control your EduGuardian experience.</p>
+          <h2>Account Settings</h2>
+          <p>Control your EduGuardian theme and preferences.</p>
         </div>
       </div>
 

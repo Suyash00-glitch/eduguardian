@@ -1,8 +1,9 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown } from "lucide-react";
+import { Bell, ChevronDown, Sun, Moon } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 const pageTitles = {
   "/dashboard": {
@@ -52,6 +53,7 @@ function Topbar() {
   const navigate = useNavigate();
 
   const { user } = useAuth();
+  const { theme, toggleTheme, isDark } = useTheme();
 
   const currentPage = pageTitles[location.pathname] || pageTitles["/dashboard"];
 
@@ -65,6 +67,17 @@ function Topbar() {
 
       {/* Actions */}
       <div className="topbar-actions">
+        {/* Theme Toggle */}
+        <button
+          className="topbar-icon-button"
+          aria-label={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
+          title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
+          onClick={toggleTheme}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          {isDark ? <Sun size={17} /> : <Moon size={17} />}
+        </button>
+
         {/* Notifications */}
         <button
           className="topbar-icon-button notification-button"
