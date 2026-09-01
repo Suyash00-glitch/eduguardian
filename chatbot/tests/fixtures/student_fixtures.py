@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from chatbot.backend.schemas.student import (
     AttendanceSummary,
+    AssessmentSummary,
     EngagementMetrics,
     RiskLevel,
     StudentContext,
@@ -89,9 +90,45 @@ STUDENT_002 = StudentContext(
     previous_interventions=[],
 )
 
+STUDENT_A_HIGH_ACHIEVER = StudentContext(
+    student_id="student_A_high_achiever",
+    student_name="Aarav Sharma",
+    department="Information Science",
+    year_of_study=3,
+    assessments=AssessmentSummary(gpa=8.8),
+    historical_academic_performance={"cgpa": 8.8, "latest_sgpa": 8.9},
+    attendance=AttendanceSummary(overall_percentage=92.0, trend="stable"),
+    subjects=[
+        SubjectPerformance(subject_name="Data Structures & Algorithms", current_marks_percentage=94.0, grade="S"),
+        SubjectPerformance(subject_name="Operating Systems", current_marks_percentage=89.0, grade="A"),
+        SubjectPerformance(subject_name="Machine Learning Foundations", current_marks_percentage=91.0, grade="S"),
+        SubjectPerformance(subject_name="Database Management Systems", current_marks_percentage=62.0, grade="D"),
+    ],
+    risk_level=RiskLevel.LOW,
+)
+
+STUDENT_B_STRUGGLING = StudentContext(
+    student_id="student_B_struggling",
+    student_name="Bhavna Patel",
+    department="Information Science",
+    year_of_study=3,
+    assessments=AssessmentSummary(gpa=6.2),
+    historical_academic_performance={"cgpa": 6.2, "latest_sgpa": 6.0},
+    attendance=AttendanceSummary(overall_percentage=68.0, trend="declining", subjects_below_threshold=["Operating Systems", "Computer Networks"]),
+    subjects=[
+        SubjectPerformance(subject_name="Data Structures & Algorithms", current_marks_percentage=71.0, grade="B"),
+        SubjectPerformance(subject_name="Operating Systems", current_marks_percentage=54.0, grade="E"),
+        SubjectPerformance(subject_name="Database Management Systems", current_marks_percentage=78.0, grade="B"),
+        SubjectPerformance(subject_name="Computer Networks", current_marks_percentage=58.0, grade="D"),
+    ],
+    risk_level=RiskLevel.HIGH,
+)
+
 _TEST_STUDENTS = {
     "student_001": STUDENT_001,
     "student_002": STUDENT_002,
+    "student_A_high_achiever": STUDENT_A_HIGH_ACHIEVER,
+    "student_B_struggling": STUDENT_B_STRUGGLING,
 }
 
 def get_mock_student_context(student_id: str) -> StudentContext:

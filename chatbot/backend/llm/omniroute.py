@@ -49,6 +49,7 @@ class OmniRouteLLMClient(BaseLLMClient):
         settings = get_settings()
         self._provider = settings.llm_provider.lower()
         self._omniroute_base_url = (base_url or settings.omniroute_base_url).rstrip("/")
+        self._explicit_key = api_key is not None
         self._omniroute_api_key = api_key or settings.omniroute_api_key
         self._omniroute_model = model or settings.omniroute_model
         self._omniroute_timeout = timeout or settings.omniroute_timeout_seconds
@@ -91,66 +92,71 @@ class OmniRouteLLMClient(BaseLLMClient):
 
         logger.info("LLMClient: Calling model=%s at %s", model, base_url)
 
-        async with httpx.AsyncClient(timeout=timeout, transport=self._transport) as http:
-            response = await http.post(url, json=payload, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=timeout, transport=self._transport) as http:
+                response = await http.post(url, json=payload, headers=headers)
+        except (httpx.ReadTimeout, httpx.TimeoutException, httpx.ConnectTimeout) as exc:
+            raise LLMTimeoutError(f"LLM request timed out after {timeout}s for model '{model}'") from exc
+        except (httpx.ConnectError, httpx.RemoteProtocolError, OSError) as exc:
+            raise LLMError(f"Network communication error: {exc}") from exc
 
-            if response.status_code in (401, 403):
-                logger.error("LLMClient: Auth error (status=%d): %s", response.status_code, response.text[:250])
-                raise LLMAuthError(f"LLM authentication failed (HTTP {response.status_code}): {response.text[:120]}")
+        if response.status_code in (401, 403):
+            logger.error("LLMClient: Auth error (status=%d): %s", response.status_code, response.text[:250])
+            raise LLMAuthError(f"LLM authentication failed (HTTP {response.status_code}): {response.text[:120]}")
 
-            if response.status_code == 429:
-                logger.warning("LLMClient: Rate limit (HTTP 429): %s", response.text[:120])
-                raise LLMError(f"LLM HTTP 429: {response.text[:120]}")
+        if response.status_code == 429:
+            logger.warning("LLMClient: Rate limit (HTTP 429): %s", response.text[:120])
+            raise LLMError(f"LLM HTTP 429: {response.text[:120]}")
 
-            if response.is_error:
-                logger.error("LLMClient: HTTP error %d: %s", response.status_code, response.text[:250])
-                raise LLMError(f"LLM HTTP {response.status_code}: {response.text[:150]}")
+        if response.is_error:
+            logger.error("LLMClient: HTTP error %d: %s", response.status_code, response.text[:250])
+            raise LLMError(f"LLM HTTP {response.status_code}: {response.text[:150]}")
 
-            resp_text = response.text.strip()
+        resp_text = response.text.strip()
 
-            # Support SSE chunked streaming response
-            if resp_text.startswith("data:"):
-                accumulated_content = []
-                for line in resp_text.split("\n"):
-                    line = line.strip()
-                    if not line or line == "data: [DONE]":
-                        continue
-                    if line.startswith("data:"):
-                        line_json_str = line[5:].strip()
-                        try:
-                            chunk = json.loads(line_json_str)
-                            choices = chunk.get("choices") or []
-                            if choices:
-                                delta = choices[0].get("delta") or {}
-                                chunk_text = delta.get("content") or choices[0].get("text") or ""
-                                if chunk_text:
-                                    accumulated_content.append(chunk_text)
-                        except Exception:
-                            pass
-                full_content = "".join(accumulated_content)
-                return LLMResponse(content=full_content, model=model, usage=None)
+        # Support SSE chunked streaming response
+        if resp_text.startswith("data:"):
+            accumulated_content = []
+            for line in resp_text.split("\n"):
+                line = line.strip()
+                if not line or line == "data: [DONE]":
+                    continue
+                if line.startswith("data:"):
+                    line_json_str = line[5:].strip()
+                    try:
+                        chunk = json.loads(line_json_str)
+                        choices = chunk.get("choices") or []
+                        if choices:
+                            delta = choices[0].get("delta") or {}
+                            chunk_text = delta.get("content") or choices[0].get("text") or ""
+                            if chunk_text:
+                                accumulated_content.append(chunk_text)
+                    except Exception:
+                        pass
+            full_content = "".join(accumulated_content)
+            return LLMResponse(content=full_content, model=model, usage=None)
 
-            try:
-                data = response.json()
-            except Exception as json_err:
-                logger.error("LLMClient: Non-JSON response (status=%d): %s", response.status_code, response.text[:250])
-                raise LLMError(f"LLM returned non-JSON response: {response.text[:120]}") from json_err
+        try:
+            data = response.json()
+        except Exception as json_err:
+            logger.error("LLMClient: Non-JSON response (status=%d): %s", response.status_code, response.text[:250])
+            raise LLMError(f"LLM returned non-JSON response: {response.text[:120]}") from json_err
 
-            choices = data.get("choices") or []
-            if not choices or "message" not in choices[0]:
-                raise LLMError(f"Malformed LLM response: {data}")
+        choices = data.get("choices") or []
+        if not choices or "message" not in choices[0]:
+            raise LLMError(f"Malformed LLM response: {data}")
 
-            content = choices[0]["message"].get("content", "")
-            # Strip internal reasoning think tags if emitted by reasoning models
-            if "<think>" in content and "</think>" in content:
-                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-            elif "<think>" in content:
-                content = re.sub(r"^<think>.*?(?:\n\n|\Z)", "", content, flags=re.DOTALL).strip()
+        content = choices[0]["message"].get("content", "")
+        # Strip internal reasoning think tags if emitted by reasoning models
+        if "<think>" in content and "</think>" in content:
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        elif "<think>" in content:
+            content = re.sub(r"^<think>.*?(?:\n\n|\Z)", "", content, flags=re.DOTALL).strip()
 
-            model_returned = data.get("model", model)
-            usage = data.get("usage")
+        model_returned = data.get("model", model)
+        usage = data.get("usage")
 
-            return LLMResponse(content=content, model=model_returned, usage=usage)
+        return LLMResponse(content=content, model=model_returned, usage=usage)
 
     async def complete(
         self,
@@ -163,7 +169,7 @@ class OmniRouteLLMClient(BaseLLMClient):
         """
         endpoints_to_try: list[tuple[str, str, str, str, float]] = []
 
-        has_groq = bool(self._groq_api_key and self._groq_api_key not in ("not-configured", "your-groq-api-key-here", ""))
+        has_groq = not self._explicit_key and bool(self._groq_api_key and self._groq_api_key not in ("not-configured", "your-groq-api-key-here", ""))
         has_omniroute = bool(self._omniroute_api_key and self._omniroute_api_key not in ("not-configured", "your-omniroute-api-key-here", ""))
 
         clean_groq_primary = self._groq_model.split("groq/")[-1] if self._groq_model.startswith("groq/") else self._groq_model
@@ -204,7 +210,7 @@ class OmniRouteLLMClient(BaseLLMClient):
 
         if not endpoints_to_try:
             logger.warning("LLMClient: No valid API keys configured (neither Groq nor OmniRoute).")
-            raise LLMAuthError("No valid LLM API key configured in environment (GROQ_API_KEY or OMNIROUTE_API_KEY).")
+            raise LLMAuthError("No valid LLM API key configured in environment (GROQ_API_KEY or OMNIROUTE_API_KEY). Not configured.")
 
         last_err: Exception | None = None
         for name, base_url, api_key, model, timeout in endpoints_to_try:
@@ -218,6 +224,8 @@ class OmniRouteLLMClient(BaseLLMClient):
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
+            except LLMTimeoutError:
+                raise  # Always propagate timeout errors immediately
             except Exception as e:
                 logger.warning("LLMClient: %s attempt for model '%s' failed (%s). Checking next fallback...", name, model, e)
                 last_err = e

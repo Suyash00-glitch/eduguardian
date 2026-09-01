@@ -344,8 +344,21 @@ class PortalAcademicDataProvider(AcademicDataProvider):
                             usn = ident.get("usn") or clean_id
 
                             att_data = data.get("attendance", {})
-                            overall_att = att_data.get("overall_percentage")
+                            overall_att = att_data.get("overall_percentage") or att_data.get("value")
+                            if overall_att is None and att_data.get("classes_held") and att_data.get("classes_attended") is not None:
+                                held = att_data.get("classes_held")
+                                att_cnt = att_data.get("classes_attended")
+                                if held > 0:
+                                    overall_att = round((att_cnt / held) * 100.0, 2)
+
                             att_trend = att_data.get("trend") or "stable"
+                            att_records = att_data.get("records", [])
+                            subjects_below_threshold = [
+                                r.get("subject_name") or r.get("subject_code")
+                                for r in att_records
+                                if r.get("percentage") is not None and float(r.get("percentage")) < 75.0
+                            ]
+                            att_by_code = {r.get("subject_code"): r.get("percentage") for r in att_records if r.get("subject_code")}
 
                             hist_perf = data.get("historical_academic_performance")
                             guidance = data.get("academic_guidance")
@@ -356,11 +369,14 @@ class PortalAcademicDataProvider(AcademicDataProvider):
                             for c in courses_raw:
                                 c_code = c.get("fsubcode") or c.get("subject_code") or ""
                                 c_name = c.get("fsubname") or c.get("subject_name") or "Course"
+                                subj_att = att_by_code.get(c_code)
                                 subjects_list.append(
                                     SubjectPerformance(
                                         subject_code=c_code,
                                         subject_name=c_name,
                                         marks_percentage=85.0,
+                                        current_marks_percentage=85.0,
+                                        attendance_percentage=float(subj_att) if subj_att is not None else None,
                                         grade="A",
                                     )
                                 )
@@ -374,6 +390,7 @@ class PortalAcademicDataProvider(AcademicDataProvider):
                                 attendance=AttendanceSummary(
                                     overall_percentage=float(overall_att) if overall_att is not None else None,
                                     trend=att_trend,
+                                    subjects_below_threshold=subjects_below_threshold,
                                 ) if overall_att is not None else None,
                                 subjects=subjects_list,
                                 historical_academic_performance=hist_perf,

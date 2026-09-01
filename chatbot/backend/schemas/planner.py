@@ -9,13 +9,49 @@ from __future__ import annotations
 import uuid
 from enum import Enum
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from chatbot.backend.schemas.student import StudentContext
 from chatbot.backend.schemas.insight import StudentInsight
 
 
-from pydantic import BaseModel, Field, field_validator
+# ── Study Plan Intake State ───────────────────────────────────────────────────
+
+class StudyPlanIntakeStep(str, Enum):
+    """Steps in the guided study plan preference collection flow."""
+    DAILY_TIME        = "daily_time"         # Q1: How much time per day?
+    DAYS_AND_TIME     = "days_and_time"      # Q2: Which days + what time of day?
+    SESSION_STYLE     = "session_style"      # Q3: Session structure preference
+    GOAL              = "goal"               # Q4: Main study goal
+    DEADLINES         = "deadlines"          # Q5: Upcoming exams / deadlines
+    PRIORITY_SUBJECTS = "priority_subjects"  # Q6: Subject prioritization
+    COMPLETE          = "complete"           # All answered — ready for LLM plan gen
+
+
+class StudyPlanIntakeState(BaseModel):
+    """
+    Multi-turn study plan intake session state.
+
+    Persisted in Message.structured_data["intake_state"] across conversation turns,
+    following the same pattern as TeachingState and QuizState.
+    """
+    active: bool = True
+    step: StudyPlanIntakeStep = StudyPlanIntakeStep.DAILY_TIME
+
+    # Collected preferences (None = not yet answered by the student)
+    daily_minutes: int | None = None
+    study_days: list[str] | None = None       # e.g. ["Monday", "Tuesday", ...]
+    preferred_time: str | None = None          # "morning" | "afternoon" | "evening" | "night"
+    session_style: str | None = None           # "pomodoro" | "continuous" | "45min" | "flexible"
+    main_goal: str | None = None               # "weak_subjects" | "exam_prep" | "improve_cgpa" | ...
+    exam_deadlines: list[dict[str, Any]] = Field(default_factory=list)  # [{"subject": ..., "date": ...}]
+    priority_subjects: list[str] = Field(default_factory=list)  # student-specified subject priorities
+
+    # Raw student text for each answered step (passed verbatim to LLM prompt for nuance)
+    raw_answers: dict[str, str] = Field(default_factory=dict)
+
+    # How many times the current question has been re-asked (unrecognized answer)
+    retry_count: int = 0
 
 
 class PriorityLevel(str, Enum):
@@ -136,6 +172,15 @@ class PlanRequest(BaseModel):
     learning_history: dict[str, Any] | None = Field(
         default=None,
         description="Supplemental interaction-derived learning history (topic records, preferences)",
+    )
+    student_preferences: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Parsed student study preferences extracted from conversation. "
+            "Keys: daily_minutes (int), preferred_time (str: morning/afternoon/evening/night), "
+            "schedule_mode (str: everyday/weekdays/weekends), excluded_days (list[str]), "
+            "exam_timeframe (str|None), has_explicit_time (bool)."
+        ),
     )
 
 

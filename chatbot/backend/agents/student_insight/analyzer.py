@@ -97,7 +97,7 @@ def analyze_subjects(subjects: list[SubjectPerformance]) -> dict[str, Any]:
 
         # Evaluate subject standing
         is_high_performing = (marks is not None and marks >= 75.0) or (s.grade in ("A", "A+", "B+"))
-        has_academic_drag = (marks is not None and marks < 60.0) or (assign_rate is not None and assign_rate < 0.70)
+        has_academic_drag = (marks is not None and marks < 65.0) or (assign_rate is not None and assign_rate < 0.70) or (s.grade in ("C", "D", "E", "F"))
 
         if is_high_performing:
             status = "strong"

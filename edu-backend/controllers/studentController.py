@@ -86,6 +86,7 @@ def get_student_roster(
 
         if ctx and is_portal_student:
             risk_eval = calculate_academic_risk(ctx)
+            ctx["risk_evaluation"] = risk_eval
             hist_perf = ctx.get("historical_academic_performance", {})
             att = ctx.get("attendance", {})
             
@@ -103,111 +104,37 @@ def get_student_roster(
             att_val = att.get("value") if att.get("status") == "available" else None
             att_status = "published" if att.get("status") == "available" and att_val is not None else "pending"
             data_src = "student_portal"
+
+            # Sync risk prediction into database
+            try:
+                db.execute(text("""
+                    INSERT INTO risk_predictions (student_id, risk_level, recovery_probability, support_signal, created_at)
+                    VALUES (:sid, :rl, :rp, :ss, CURRENT_TIMESTAMP)
+                """), {
+                    "sid": row["id"],
+                    "rl": r_level,
+                    "rp": rec_prob,
+                    "ss": risk_eval.get("support_signal") or f"Predictive risk evaluated as {r_level}"
+                })
+                db.commit()
+            except Exception:
+                db.rollback()
         else:
-            # Demo student
-            data_src = "demo"
+            # Baseline calculation for registered students pending portal sync
+            data_src = "registered"
             avg_att = row["avg_attendance"]
             r_level = (row["db_risk_level"] or "low").lower()
             rec_prob = float(row["db_recovery_prob"]) if row["db_recovery_prob"] is not None else 80.0
 
-            if row["usn"] == "1MS21IS001" or "alex" in (row["full_name"] or "").lower():
-                cgpa = None
-                latest_sgpa = None
-                backlogs = 0
-                att_val = round(float(avg_att), 2) if avg_att is not None else 92.50
-                att_status = "published" if att_val is not None else "pending"
-                r_level = "low"
-                r_score = 10.0
-                confidence = "low"
-                r_basis = "historical_academic_performance"
-                factors = ["Consistent attendance and high quiz performance (88%)"]
-            elif row["usn"] == "NNM24IS012" or "ananya" in (row["full_name"] or "").lower():
-                cgpa = 6.80
-                latest_sgpa = 6.50
-                backlogs = 1
-                att_val = round(float(avg_att), 2) if avg_att is not None else 76.32
-                att_status = "published"
-                r_level = "medium"
-                r_score = 48.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Moderate LMS engagement, requires OS fundamentals review"]
-            elif row["usn"] == "NNM24IS019" or "david" in (row["full_name"] or "").lower():
-                cgpa = 5.24
-                latest_sgpa = 4.50
-                backlogs = 4
-                att_val = round(float(avg_att), 2) if avg_att is not None else 52.50
-                att_status = "published"
-                r_level = "high"
-                r_score = 78.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Consecutive missed classes (54%) and struggling with ML concepts"]
-            elif row["usn"] == "NNM24IS056" or "karthik" in (row["full_name"] or "").lower():
-                cgpa = 7.30
-                latest_sgpa = 7.20
-                backlogs = 1
-                att_val = round(float(avg_att), 2) if avg_att is not None else 75.00
-                att_status = "published"
-                r_level = "medium"
-                r_score = 45.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Average quiz performance (61%) - high potential with mentoring"]
-            elif row["usn"] == "NNM24IS088" or "priya" in (row["full_name"] or "").lower():
-                cgpa = 5.80
-                latest_sgpa = 5.20
-                backlogs = 2
-                att_val = round(float(avg_att), 2) if avg_att is not None else 61.11
-                att_status = "published"
-                r_level = "high"
-                r_score = 72.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Low quiz average (42%) and irregular LMS activity"]
-            elif row["usn"] == "NNM24IS045" or "rahul" in (row["full_name"] or "").lower():
-                cgpa = 5.40
-                latest_sgpa = 4.80
-                backlogs = 3
-                att_val = round(float(avg_att), 2) if avg_att is not None else 57.89
-                att_status = "published"
-                r_level = "high"
-                r_score = 82.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Critical attendance (58%) and 3 missed assignments in OS & DCN"]
-            elif row["usn"] == "NNM24IS092" or "sneha" in (row["full_name"] or "").lower():
-                cgpa = 7.10
-                latest_sgpa = 7.00
-                backlogs = 1
-                att_val = round(float(avg_att), 2) if avg_att is not None else 73.68
-                att_status = "published"
-                r_level = "medium"
-                r_score = 42.0
-                confidence = "partial"
-                r_basis = "current_and_historical"
-                factors = ["Declining quiz trend in DCN Foundations (64%)"]
-            elif row["usn"] == "NNM24IS110" or "vikram" in (row["full_name"] or "").lower():
-                cgpa = 9.20
-                latest_sgpa = 9.40
-                backlogs = 0
-                att_val = round(float(avg_att), 2) if avg_att is not None else 95.00
-                att_status = "published"
-                r_level = "low"
-                r_score = 5.0
-                confidence = "full"
-                r_basis = "current_and_historical"
-                factors = ["Top quartile performance across all enrolled subjects (94%)"]
-            else:
-                cgpa = 7.50
-                latest_sgpa = 7.50
-                backlogs = 0
-                att_val = round(float(avg_att), 2) if avg_att is not None else None
-                att_status = "published" if att_val is not None else "pending"
-                r_score = 15.0
-                confidence = "partial" if avg_att is not None else "low"
-                r_basis = "current_and_historical" if avg_att is not None else "historical_academic_performance"
-                factors = ["Academic progress on track"]
+            cgpa = None
+            latest_sgpa = None
+            backlogs = 0
+            att_val = round(float(avg_att), 2) if avg_att is not None else None
+            att_status = "published" if att_val is not None else "pending"
+            r_score = 15.0
+            confidence = "partial" if avg_att is not None else "low"
+            r_basis = "current_and_historical" if avg_att is not None else "historical_academic_performance"
+            factors = ["Academic records pending portal synchronization"]
 
         if r_level == "high":
             high_count += 1
@@ -394,48 +321,14 @@ def get_student_risk_detail(db, student_id: int):
                 },
                 "historical_semesters": []
             }
-    else:
-        # Demo student detail
+        # Baseline detail for registered students pending portal sync
         avg_att = row["avg_attendance"]
         r_level = (row["db_risk_level"] or "low").upper()
         rec_prob = float(row["db_recovery_prob"]) if row["db_recovery_prob"] is not None else 80.0
 
-        if row["usn"] == "1MS21IS001" or "alex" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = None, None, 0
-            factors = ["Consistent attendance and high quiz performance (88%)"]
-            r_score, conf, r_basis = 10.0, "LOW", "historical_academic_performance"
-        elif row["usn"] == "NNM24IS012" or "ananya" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 6.80, 6.50, 1
-            factors = ["Moderate LMS engagement, requires OS fundamentals review"]
-            r_score, conf, r_basis = 48.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS019" or "david" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 5.24, 4.50, 4
-            factors = ["Consecutive missed classes (54%) and struggling with ML concepts"]
-            r_score, conf, r_basis = 78.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS056" or "karthik" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 7.30, 7.20, 1
-            factors = ["Average quiz performance (61%) - high potential with mentoring"]
-            r_score, conf, r_basis = 45.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS088" or "priya" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 5.80, 5.20, 2
-            factors = ["Low quiz average (42%) and irregular LMS activity"]
-            r_score, conf, r_basis = 72.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS045" or "rahul" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 5.40, 4.80, 3
-            factors = ["Critical attendance (58%) and 3 missed assignments in OS & DCN"]
-            r_score, conf, r_basis = 82.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS092" or "sneha" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 7.10, 7.00, 1
-            factors = ["Declining quiz trend in DCN Foundations (64%)"]
-            r_score, conf, r_basis = 42.0, "PARTIAL", "current_and_historical"
-        elif row["usn"] == "NNM24IS110" or "vikram" in (row["full_name"] or "").lower():
-            cgpa, sgpa, backlogs = 9.20, 9.40, 0
-            factors = ["Top quartile performance across all enrolled subjects (94%)"]
-            r_score, conf, r_basis = 5.0, "FULL", "current_and_historical"
-        else:
-            cgpa, sgpa, backlogs = 7.50, 7.50, 0
-            factors = ["Academic progress on track"]
-            r_score, conf, r_basis = 15.0, "PARTIAL" if avg_att is not None else "LOW", "current_and_historical"
+        cgpa, sgpa, backlogs = None, None, 0
+        factors = ["Academic records pending portal synchronization"]
+        r_score, conf, r_basis = 15.0, "PARTIAL" if avg_att is not None else "LOW", "current_and_historical"
 
         return {
             "student_id": row["id"],
@@ -445,7 +338,7 @@ def get_student_risk_detail(db, student_id: int):
             "department": row["department"],
             "semester": row["semester"],
             "section": row["section"],
-            "data_source": "demo",
+            "data_source": "registered",
             "academic_performance": {
                 "cgpa": cgpa,
                 "latest_sgpa": sgpa,

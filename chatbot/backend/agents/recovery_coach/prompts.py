@@ -242,7 +242,7 @@ def format_student_insight_section(insight: StudentInsight | None, inject: bool 
 
 
 def format_study_plan_section(plan: StudyPlan | None) -> str:
-    """Formats structured study plan into context for natural introduction."""
+    """Formats structured study plan into context for natural introduction, including rationale."""
     if not plan:
         return "STUDY PLAN: No structured plan generated for this turn."
 
@@ -253,12 +253,25 @@ def format_study_plan_section(plan: StudyPlan | None) -> str:
     if plan.goals:
         lines.append(f"Goals: {', '.join(plan.goals)}")
     if plan.priorities:
-        lines.append(f"Priorities: {', '.join(plan.priorities)}")
+        lines.append(f"Priority subjects: {', '.join(plan.priorities)}")
+    if plan.rationale:
+        lines.append(f"Personalization rationale: {plan.rationale}")
     if plan.notes:
         lines.append(f"Strategy note: {plan.notes}")
+
+    # Include first 2 task previews so coach can mention them naturally
+    preview_tasks = [t for t in plan.tasks if t.time_slot][:2]
+    if preview_tasks:
+        lines.append("First scheduled tasks:")
+        for t in preview_tasks:
+            lines.append(f"  • {t.day} {t.time_slot}: {t.title} ({t.duration_minutes} min)")
+
     lines.append(
-        "\n[Instruction: Introduce this plan warmly. Mention the first 1–2 tasks naturally. "
-        "Encourage the student to open the plan and start with the first step.]"
+        "\n[Instruction: Introduce this plan warmly. Briefly mention 1\u20132 concrete tasks and their times. "
+        "Explain the personalization rationale naturally (e.g. why a subject has more time). "
+        "Encourage the student to open the plan card and start with the first task. "
+        "Do NOT expose risk scores or internal labels.]\n"
+        "Respond as EduGuardian:"
     )
     return "\n".join(lines)
 
@@ -422,13 +435,15 @@ def _detect_explicit_data_request(message: str) -> bool:
     """Returns True if asking for a specific numerical academic record (CGPA, SGPA, attendance, marks)."""
     msg_lower = message.lower()
     keywords = [
-        "what is my attendance", "what's my attendance", "my attendance percentage",
+        "what is my attendance", "what's my attendance", "my attendance", "my attendance percentage", "how is my attendance",
+        "what is my attendence", "what's my attendence", "my attendence", "my attendence percentage", "how is my attendence",
+        "attendance percentage", "attendence percentage", "overall attendance", "total attendance",
         "what is my score", "what's my score", "what are my marks", "my grades",
         "what is my cgpa", "what's my cgpa", "my cgpa", "tell me my cgpa",
         "what is my sgpa", "what's my sgpa", "my sgpa", "my latest sgpa", "latest sgpa",
         "my credits", "how many credits", "my backlogs", "do i have backlogs",
     ]
-    return any(kw in msg_lower for kw in keywords)
+    return any(kw in msg_lower for kw in keywords) or bool(re.search(r"\b(my\s+)?attend[ae]nce\b", msg_lower))
 
 
 def _detect_emotional_message(message: str) -> bool:
@@ -487,6 +502,12 @@ def _detect_educational_concept(message: str) -> bool:
         r")\b",
         msg_clean,
     ))
+
+
+def _detect_identity_request(message: str) -> bool:
+    """Alias for is_name_query — returns True if student is asking who they are or their name."""
+    from chatbot.backend.core.memory import is_name_query as _is_name_query
+    return _is_name_query(message)
 
 
 # ── Curated Educational Links ──────────────────────────────────────────────────
@@ -619,7 +640,8 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
 
     # 3. Determine whether academic context should be injected
     # Provide student context whenever available so the coach knows real subjects, courses, and student name
-    needs_academic_context = bool(request.student_context)
+    # Also inject context when student_insight is provided (even without full student_context)
+    needs_academic_context = bool(request.student_context or request.student_insight)
 
     sections = [
         format_student_context_section(
@@ -864,7 +886,7 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     # 11. Explicit Academic Data (CGPA, SGPA, attendance, marks, credits)
     elif is_explicit_data:
         sections.append(
-            "\n[CRITICAL INSTRUCTION — DIRECT FACTUAL ACADEMIC DATA (CGPA / SGPA / ATTENDANCE)]\n"
+            "\n[CRITICAL INSTRUCTION — DIRECT FACTUAL DATA (CGPA / SGPA / ATTENDANCE)]\n"
             "• If the student asks 'What is my CGPA?' or asks about their CGPA:\n"
             "  - State their current CGPA directly from the ground-truth context (e.g. 'Your current CGPA is 8.45. Your latest SGPA is 8.67 from Semester 4, and your academic trajectory is improving.').\n"
             "  - NEVER say you cannot calculate it or ask the student for credit weights when it is present in the context!\n"
@@ -878,9 +900,12 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     elif is_focus:
         sections.append(
             "\n[CRITICAL INSTRUCTION — SUBJECT PRIORITY RECOMMENDATION]\n"
-            "• LENGTH: Exactly 1 sentence.\n"
-            "• Recommend the top priority subject based on Student Insight.\n"
-            "• Stop after 1 sentence.\n"
+            "• LENGTH: 2–4 sentences or a short structured list (50–120 words).\n"
+            "• Recommend the top 1–2 priority subjects based on the Student Insight and Student Academic Context.\n"
+            "• Explicitly name the subject(s), mention the specific issue (e.g. attendance %, marks %, backlogs), and give 1 concrete action step.\n"
+            "• If the student is a high-achiever (CGPA ≥ 7.5, no backlogs), acknowledge their strong standing and recommend advanced focus areas or project-level challenges.\n"
+            "• If the student is struggling (attendance < 75%, marks < 60%, or active backlogs), prioritize the weakest area with a specific recovery step.\n"
+            "• Do NOT expose internal risk labels, scores, or diagnostic metadata.\n"
             "Respond as EduGuardian:"
         )
 
@@ -888,9 +913,12 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
     elif is_progress:
         sections.append(
             "\n[CRITICAL INSTRUCTION — PROGRESS SUMMARY]\n"
-            "• LENGTH: Exactly 1 sentence.\n"
-            "• Summarize status directly based on Student Insight.\n"
-            "• Stop after 1 sentence.\n"
+            "• LENGTH: 2–4 sentences (60–120 words).\n"
+            "• Provide a constructive, data-grounded academic status summary based on the Student Academic Context and Student Insight.\n"
+            "• Mention specific subjects that are strong or weak (by name), attendance trend, and CGPA/SGPA if available.\n"
+            "• If the student is performing well overall, affirm that and suggest how to maintain or extend their edge.\n"
+            "• If the student has a specific weak area, identify it (subject name + metric) and suggest one concrete next step.\n"
+            "• Do NOT expose internal risk labels or diagnostic metadata.\n"
             "Respond as EduGuardian:"
         )
 
@@ -910,8 +938,9 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
 
     # 15. Educational Concept Explanation
     elif is_complex or is_educational:
+        detail_marker = "[CRITICAL INSTRUCTION — DETAILED REQUEST]" if is_complex else "[RESPONSE INSTRUCTION — EDUCATIONAL CONCEPT EXPLANATION]"
         sections.append(
-            "\n[RESPONSE INSTRUCTION — EDUCATIONAL CONCEPT EXPLANATION]\n"
+            f"\n{detail_marker}\n"
             "• Provide a clear, intuitive, engaging explanation matching what the user requested.\n"
             "• Use 1–3 relevant concept emojis naturally placed at key points (e.g., 🧠, 💡, 💻, ⚙️, 📚, ✍️).\n"
             "• If asked to explain in simple words, use clear analogies.\n"
@@ -919,13 +948,31 @@ def build_recovery_coach_user_prompt(request: CoachRequest) -> str:
             "Respond as EduGuardian:"
         )
 
-    # 16. Study Plan Presentation
+    # 16. Study Plan Presentation or Preference Gathering
     elif request.study_plan:
         sections.append(
             "\n[RESPONSE INSTRUCTION — STUDY PLAN PRESENTATION]\n"
             "• LENGTH: 40–70 words.\n"
             "• Warmly introduce the plan and highlight its core goal and first 1–2 tasks (e.g. using 🎯, 🗓️, or ⏰).\n"
+            "• Explain why specific subjects received more time based on their performance (e.g. weaker subjects receive deeper practice blocks).\n"
             "• Encourage opening the plan card to begin.\n"
+            "Respond as EduGuardian:"
+        )
+
+    elif getattr(request, "response_mode", None) in (ResponseMode.STUDY_PLAN, "study_plan"):
+        sections.append(
+            "\n[RESPONSE INSTRUCTION — STUDY PLAN PREFERENCE GATHERING]\n"
+            "• The student asked to create a study plan or timetable, but has not yet provided their specific study preferences.\n"
+            "• Do NOT generate or present a timetable yet.\n"
+            "• Enthusiastically acknowledge their request and affirm that you will build a tailored schedule around their actual courses and current academic performance.\n"
+            "• Ask concise questions to gather their study preferences:\n"
+            "  1. How much time can you study per day? (e.g., 1 hour, 2 hours, 3 hours, custom)\n"
+            "  2. Which days would you like to study? (e.g., Monday–Friday, Monday–Saturday, Every day, custom)\n"
+            "  3. What time of day do you prefer? (Morning, Afternoon, Evening, Night)\n"
+            "  4. What is your main goal? (Improving weak subjects, exam preparation, boosting CGPA, completing syllabus, or balancing all subjects)\n"
+            "  5. Do you have any upcoming exams or critical assignment deadlines?\n"
+            "• (Do NOT ask questions whose answers were already provided in the conversation history).\n"
+            "• Keep the tone supportive, welcoming, and structured.\n"
             "Respond as EduGuardian:"
         )
 

@@ -287,34 +287,29 @@ function Profile() {
               </div>
             )}
 
-            {histPerf.sgpa_trend && histPerf.sgpa_trend !== "insufficient_data" && (
-              <div>
-                <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", fontWeight: 600 }}>
-                  Performance Trajectory
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "var(--font-md)",
-                    fontWeight: 700,
-                    marginTop: "6px",
-                    color:
-                      histPerf.sgpa_trend === "improving"
-                        ? "var(--primary)"
-                        : histPerf.sgpa_trend === "declining"
-                        ? "var(--danger)"
-                        : "var(--text)",
-                  }}
-                >
-                  {histPerf.sgpa_trend === "improving" && <TrendingUp size={18} />}
-                  {histPerf.sgpa_trend === "declining" && <TrendingDown size={18} />}
-                  {histPerf.sgpa_trend === "stable" && <Minus size={18} />}
-                  {histPerf.sgpa_trend.charAt(0).toUpperCase() + histPerf.sgpa_trend.slice(1)}
-                </div>
+            <div>
+              <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", fontWeight: 600 }}>
+                Academic Standing
               </div>
-            )}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "var(--font-md)",
+                  fontWeight: 700,
+                  marginTop: "6px",
+                  color: "var(--primary)",
+                }}
+              >
+                <Award size={18} />
+                {histPerf.cgpa >= 8.5
+                  ? "Distinction Standing"
+                  : histPerf.cgpa >= 6.5
+                  ? "First Class Standing"
+                  : "Active Standing"}
+              </div>
+            </div>
 
             {histPerf.total_credits_earned && (
               <div>

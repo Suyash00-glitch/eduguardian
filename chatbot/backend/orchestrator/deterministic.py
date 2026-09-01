@@ -53,6 +53,31 @@ def try_resolve_deterministic_answer(
         )
         return True, system_agents_text, RequestIntent.SYSTEM_ARCHITECTURE
 
+    # 2. Direct Attendance Inquiry ("what is my attendance", "what is my attendence", "my attendance")
+    if any(w in msg_clean for w in ["attendance", "attendence"]) and any(kw in msg_clean for kw in ["what", "my", "percentage", "rate", "status", "how much", "classes"]):
+        if student_context and student_context.attendance and student_context.attendance.overall_percentage is not None:
+            pct = student_context.attendance.overall_percentage
+            if constraints.one_word or "in 1 word" in msg_clean or "one word" in msg_clean:
+                return True, f"{pct:.1f}%.", RequestIntent.ACADEMIC_INSIGHT
+            return True, f"Your current attendance is {pct:.1f}%.", RequestIntent.ACADEMIC_INSIGHT
+        return True, "I don't have your attendance records available right now.", RequestIntent.ACADEMIC_INSIGHT
+
+    # 3. Direct CGPA / SGPA Inquiry ("what is my cgpa", "my cgpa", "what is my sgpa", "my latest sgpa")
+    if any(kw in msg_clean for kw in ["cgpa", "sgpa", "gpa"]) and any(kw in msg_clean for kw in ["what", "my", "tell", "current", "latest"]):
+        hist = student_context.historical_academic_performance if student_context else None
+        if hist and (hist.get("cgpa") is not None or hist.get("latest_sgpa") is not None):
+            cgpa = hist.get("cgpa")
+            sgpa = hist.get("latest_sgpa")
+            sem = hist.get("total_semesters_completed") or 4
+            trend = hist.get("sgpa_trend") or "stable"
+            if "sgpa" in msg_clean and "cgpa" not in msg_clean and sgpa is not None:
+                return True, f"Your latest SGPA is {sgpa} (Semester {sem}).", RequestIntent.ACADEMIC_INSIGHT
+            if cgpa is not None and sgpa is not None:
+                return True, f"Your current CGPA is {cgpa}. Your latest SGPA is {sgpa} from Semester {sem}, and your academic trajectory is {trend}.", RequestIntent.ACADEMIC_INSIGHT
+            if cgpa is not None:
+                return True, f"Your current CGPA is {cgpa}.", RequestIntent.ACADEMIC_INSIGHT
+        return True, "I don't have your CGPA records available right now.", RequestIntent.ACADEMIC_INSIGHT
+
     # 4. Compound Question: Operating System + Tell me my name
     if "operating system" in msg_clean and "name" in msg_clean:
         os_def = "An operating system is system software that manages computer hardware, software resources, and provides common services for computer programs."

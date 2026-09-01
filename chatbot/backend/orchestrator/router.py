@@ -195,15 +195,24 @@ def extract_teach_me_topic(text: str) -> tuple[bool, str | None, TeachingDifficu
 
 _PLAN_PATTERNS = re.compile(
     r"\b("
-    r"study plan|make me a plan|create a plan|give me a plan|"
-    r"weekly plan|weekly schedule|daily schedule|"
+    r"study plan|make me a plan|create a plan|give me a plan|detailed plan|"
+    r"weekly plan|weekly schedule|daily schedule|study schedule|"
     r"schedule for|plan for (this|next|the) week|"
     r"help me (organize|plan|schedule)|"
     r"what should i study|revision plan|revision schedule|"
     r"timetable|study timetable|"
     r"how should i study|where do i start studying|"
     r"adjust my (plan|schedule)|make (monday|tuesday|wednesday|thursday|friday|saturday|sunday) easier|"
-    r"change my plan|update my schedule|modify my plan"
+    r"change my plan|update my schedule|modify my plan|"
+    r"i\s+can\s+study\s+\d+|"
+    r"\d+\s*(?:hours?|hrs?|mins?|minutes?)\s*(?:a|per)?\s*day|"
+    r"study\s+\d+\s*(?:hours?|hrs?|mins?)|"
+    r"(?:monday\s*(?:to|-)\s*saturday|monday\s*(?:to|-)\s*friday|mon\s*(?:to|-)\s*sat|mon\s*(?:to|-)\s*fri|weekdays|weekends|every\s*day)|"
+    r"(?:prefer\s+)?(?:morning|afternoon|evening|night)\s+(?:study|slots?)|"
+    r"prefer\s+(?:morning|afternoon|evening|night)|"
+    r"focus\s+on\s+(?:my\s+)?weak\s+subjects?|"
+    r"make\s+it\s+only\s+\d+|"
+    r"can\s+you\s+make\s+it\s+only\s+\d+"
     r")\b",
     re.IGNORECASE,
 )
@@ -1185,6 +1194,12 @@ def route_after_intent(state: GraphState) -> str:
     """
     Conditional edge function after request processing.
     Directs deterministic and fast-path responses straight to the response validator.
+
+    IMPORTANT: If an active study-plan intake session exists, we MUST route to
+    study_plan_intake regardless of what the intent detector says.  Student answers
+    like "1 hour", "night", "Monday to Saturday" will be classified as GENERAL_SUPPORT
+    by the intent detector, but they are really intake responses that must be processed
+    by the intake state machine.
     """
     processed = state.get("processed_request")
     is_det = False
@@ -1197,6 +1212,21 @@ def route_after_intent(state: GraphState) -> str:
     if is_det or (final_resp and getattr(final_resp, "response_text", None)):
         return "response_validator"
 
+    # ── Active Intake Session Override ────────────────────────────────────────
+    # If there is an in-progress study-plan questionnaire, route straight to
+    # study_plan_intake.  Do NOT rely on intent detection for mid-flow answers.
+    intake = state.get("intake_state")
+    if intake and getattr(intake, "active", False):
+        from chatbot.backend.schemas.planner import StudyPlanIntakeStep
+        if intake.step != StudyPlanIntakeStep.COMPLETE:
+            # Check if student wants to cancel
+            user_msg = (state.get("user_message") or "").strip().lower()
+            if any(w in user_msg for w in ["cancel", "stop", "never mind", "nevermind", "forget it", "skip plan"]):
+                # Cancel handled by intake_node which will mark active=False and return no question
+                pass
+            return "study_plan_intake"
+
+    # ── Normal Intent-Based Routing ────────────────────────────────────────────
     intent = state.get("intent", IntentType.GENERAL_SUPPORT)
     if is_planning_intent(intent) or is_academic_intent(intent):
         return "student_insight"
@@ -1207,8 +1237,40 @@ def route_after_intent(state: GraphState) -> str:
 def route_after_insight(state: GraphState) -> str:
     """
     Conditional edge function executed after Student Insight Agent.
+    If intent is study_planning:
+      - If it's an existing plan revision with explicit change requests: routes to study_planner
+      - Otherwise: routes to study_plan_intake for stateful multi-turn preference gathering
+    If intent is academic_insight or general:
+      - routes to recovery_coach
     """
     intent = state.get("intent", IntentType.GENERAL_SUPPORT)
     if is_planning_intent(intent):
+        user_msg = state.get("resolved_user_message") or state.get("user_message", "")
+        existing_plan = state.get("plan_response")
+
+        # If user is asking for a direct revision on an existing plan
+        if existing_plan is not None:
+            lower = user_msg.lower()
+            is_revision = bool(re.search(
+                r"\b(make\s+it|change\s+|prefer\s+|more\s+time|less\s+time|make\s+tuesday|make\s+monday|easier|harder)\b",
+                lower,
+            ))
+            if is_revision:
+                return "study_planner"
+
+        return "study_plan_intake"
+    return "recovery_coach"
+
+
+def route_after_intake(state: GraphState) -> str:
+    """
+    Conditional edge function executed after Study Plan Intake Node.
+    - If intake is complete: routes to study_planner to generate the personalized plan
+    - If intake is still in progress: routes to recovery_coach to deliver the next question
+    """
+    from chatbot.backend.schemas.planner import StudyPlanIntakeStep
+    intake = state.get("intake_state")
+    if intake and (intake.step == StudyPlanIntakeStep.COMPLETE or not intake.active):
         return "study_planner"
     return "recovery_coach"
+

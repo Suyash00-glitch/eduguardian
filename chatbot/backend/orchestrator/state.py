@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, TypedDict, Union
 from chatbot.backend.schemas.student import StudentContext
 from chatbot.backend.schemas.insight import StudentInsight
-from chatbot.backend.schemas.planner import StudyPlan
+from chatbot.backend.schemas.planner import StudyPlan, StudyPlanIntakeState
 from chatbot.backend.schemas.coach import CoachResponse
 from chatbot.backend.schemas.routing import IntentType
 from chatbot.backend.schemas.teaching import TeachingState
@@ -39,6 +39,10 @@ class GraphState(TypedDict, total=False):
 
     # Active Quiz session state (if ongoing or initiated)
     quiz_state: QuizState | None
+
+    # Active Study Plan Intake session state (if ongoing or initiated)
+    intake_state: StudyPlanIntakeState | None
+    intake_question: str | None
 
     # ── Intent Routing ────────────────────────────────────────────────────────
     # 'general_support' | 'academic_insight' | 'study_planning'

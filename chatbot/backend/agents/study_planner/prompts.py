@@ -193,6 +193,26 @@ def build_study_planner_user_prompt(request: PlanRequest) -> str:
         if ins.recommended_areas_of_attention:
             lines.append(f"- Recommended Practice Topics: {', '.join(ins.recommended_areas_of_attention)}")
 
+    # Stated Student Preferences (from multi-turn conversational intake)
+    if request.student_preferences and isinstance(request.student_preferences, dict):
+        sp = request.student_preferences
+        lines.append("\n── STUDENT STATED STUDY PREFERENCES (COLLECTED DIRECTLY) ──")
+        if sp.get("daily_minutes"):
+            lines.append(f"- Available Daily Study Time: {sp['daily_minutes']} minutes/day (STRICT LIMIT — DO NOT EXCEED)")
+        if sp.get("study_days"):
+            lines.append(f"- Scheduled Days: {', '.join(sp['study_days'])} (Do NOT schedule mandatory tasks on excluded days)")
+        if sp.get("preferred_time"):
+            lines.append(f"- Preferred Time of Day: {sp['preferred_time']} (Schedule task time slots during this window)")
+        if sp.get("session_style"):
+            lines.append(f"- Preferred Session Structure: {sp['session_style']}")
+        if sp.get("main_goal"):
+            lines.append(f"- Primary Focus Goal: {sp['main_goal']}")
+        if sp.get("exam_deadlines"):
+            dl_strs = [f"{d.get('subject')}: in {d.get('timeframe')}" if isinstance(d, dict) else str(d) for d in sp["exam_deadlines"]]
+            lines.append(f"- Upcoming Exam Deadlines: {', '.join(dl_strs)}")
+        if sp.get("priority_subjects"):
+            lines.append(f"- Student Requested Priority Subjects: {', '.join(sp['priority_subjects'])}")
+
     # Supplemental Learning History (Quiz performance & explicit preferences)
     learning_context_sec = format_planner_learning_context(request.learning_history, request.user_goal)
     if learning_context_sec:
@@ -207,7 +227,13 @@ def build_study_planner_user_prompt(request: PlanRequest) -> str:
             lines.append(f"- Already Completed: {', '.join(completed)}")
         lines.append("Instruction: Keep completed progress and adjust remaining tasks to fit the student's updated needs.")
 
-    lines.append("\nCRITICAL REMINDER: Output ONLY valid JSON. Every task MUST have a valid subject name. Do NOT output 'Communicate with student' or 'Subject = None'.")
+    lines.append("\n── INSTRUCTIONS FOR PERSONALIZED PLAN GENERATION ──")
+    lines.append("1. Use the student's REAL academic performance (enrolled courses, marks, weak subjects) and stated preferences above.")
+    lines.append("2. Do NOT invent marks, subjects, weaknesses, schedules, or deadlines.")
+    lines.append("3. Allocate more study time to genuinely weak subjects (marks < 70% or Grade C/D/E/F) based on the supplied academic data.")
+    lines.append("4. Strictly respect the student's requested daily study duration and preferred days/timing.")
+    lines.append("5. Do not exceed the student's available daily study time.")
+    lines.append("6. Output ONLY valid JSON matching the schema. Every task MUST have a valid subject name. Do NOT output 'Communicate with student' or 'Subject = None'.")
     lines.append("Output the complete StudyPlan JSON:")
     return "\n".join(lines)
 

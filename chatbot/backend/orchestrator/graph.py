@@ -41,6 +41,7 @@ from chatbot.backend.config import get_settings
 from chatbot.backend.orchestrator.router import (
     process_user_request,
     route_after_insight,
+    route_after_intake,
     route_after_intent,
     classify_intent_detailed,
     classify_intent,
@@ -218,6 +219,72 @@ async def student_insight_node(state: GraphState) -> dict[str, Any]:
     }
 
 
+async def study_plan_intake_node(state: GraphState) -> dict[str, Any]:
+    """
+    Manages multi-turn study plan preference collection conversationally.
+    - If intake_state is None or inactive: initializes fresh intake (Turn 1).
+    - If intake_state is active: parses student answers and advances to the next step.
+    - If intake is complete: marks active=False and step=COMPLETE.
+    - If student says 'cancel': deactivates intake gracefully.
+    """
+    from chatbot.backend.agents.study_planner.intake import StudyPlanIntakeManager
+    from chatbot.backend.schemas.planner import StudyPlanIntakeStep
+
+    intake = state.get("intake_state")
+    user_msg = state.get("resolved_user_message") or state.get("user_message", "")
+
+    # ── Cancellation detection ──────────────────────────────────────────────
+    _cancel_keywords = ["cancel", "stop", "never mind", "nevermind", "forget it", "skip plan", "don't want", "do not want"]
+    if intake and getattr(intake, "active", False) and any(kw in user_msg.lower() for kw in _cancel_keywords):
+        cancelled_intake = intake.model_copy(update={"active": False})
+        cancel_msg = "No problem! I've cancelled the study plan questionnaire. Feel free to ask anything else or start fresh whenever you're ready. 😊"
+        return {
+            **state,
+            "intake_state": cancelled_intake,
+            "intake_question": cancel_msg,
+            "agents_used": state.get("agents_used", []) + ["study_plan_intake"],
+        }
+
+    if intake and (intake.step == StudyPlanIntakeStep.COMPLETE or not getattr(intake, "active", True)):
+        return {
+            **state,
+            "intake_state": intake,
+            "intake_question": None,
+            "agents_used": state.get("agents_used", []) + ["study_plan_intake"],
+        }
+
+    manager = StudyPlanIntakeManager()
+    student_name = state.get("conversational_name")
+    if not student_name and state.get("student_context"):
+        ctx = state.get("student_context")
+        student_name = ctx.student_name or ctx.full_name or ""
+
+    if not intake or not getattr(intake, "active", False):
+        # Turn 1: Fresh request
+        new_intake, question = manager.initialize(student_name)
+        # Check if student's initial message already contained preferences (e.g. "Create a plan for 2 hours daily")
+        from chatbot.backend.agents.study_planner.builder import is_bare_study_plan_request
+        if not is_bare_study_plan_request(user_msg):
+            new_intake, next_q = manager.advance(new_intake, user_msg)
+            if next_q:
+                question = next_q
+        return {
+            **state,
+            "intake_state": new_intake,
+            "intake_question": question,
+            "agents_used": state.get("agents_used", []) + ["study_plan_intake"],
+        }
+    else:
+        # Turn N: Advance intake state with student's answer
+        updated_intake, next_question = manager.advance(intake, user_msg)
+        return {
+            **state,
+            "intake_state": updated_intake,
+            "intake_question": next_question,
+            "agents_used": state.get("agents_used", []) + ["study_plan_intake"],
+        }
+
+
 async def study_planner_node(state: GraphState) -> dict[str, Any]:
     """Orchestrator node invoking Study Planner Agent via A2A client."""
     context = state.get("student_context")
@@ -230,6 +297,16 @@ async def study_planner_node(state: GraphState) -> dict[str, Any]:
         }
 
     effective_msg = state.get("resolved_user_message") or state.get("user_message", "Create a study plan for me")
+    intake = state.get("intake_state")
+
+    from chatbot.backend.schemas.planner import StudyPlanIntakeStep
+    if intake and (intake.step == StudyPlanIntakeStep.COMPLETE or not intake.active):
+        from chatbot.backend.agents.study_planner.intake import StudyPlanIntakeManager
+        prefs = StudyPlanIntakeManager().build_preferences_dict(intake)
+    else:
+        from chatbot.backend.agents.study_planner.builder import parse_study_preferences
+        prefs = parse_study_preferences(effective_msg, state.get("conversation_history", []))
+
     request = PlanRequest(
         student_id=state.get("student_id", context.student_id),
         student_context=context,
@@ -237,6 +314,7 @@ async def study_planner_node(state: GraphState) -> dict[str, Any]:
         existing_plan=state.get("plan_response"),
         user_goal=effective_msg,
         learning_history=state.get("learning_history"),
+        student_preferences=prefs,
     )
 
     settings = get_settings()
@@ -268,6 +346,22 @@ async def study_planner_node(state: GraphState) -> dict[str, Any]:
 
 async def recovery_coach_node(state: GraphState) -> dict[str, Any]:
     """Orchestrator node invoking Recovery Coach Agent via A2A client."""
+    # Fast path: If an active intake question is waiting to be delivered to the student (and no final plan was created yet)
+    intake_question = state.get("intake_question")
+    if intake_question and not state.get("plan_response"):
+        return {
+            **state,
+            "final_response": CoachResponse(
+                response_text=intake_question,
+                has_study_plan=False,
+                study_plan=None,
+                suggested_followups=[],
+                resources=[],
+                metadata={"intake": True},
+            ),
+            "agents_used": state.get("agents_used", []) + ["recovery_coach"],
+        }
+
     history = state.get("conversation_history", [])
     adapted_history = []
     for m in history:
@@ -320,7 +414,6 @@ async def recovery_coach_node(state: GraphState) -> dict[str, Any]:
             response = await RecoveryCoachAgent().generate_response(request)
     except Exception as exc:
         logger.error("RecoveryCoachNode: Execution failed (%s)", exc)
-        from chatbot.backend.schemas.coach import CoachResponse
         response = CoachResponse(
             response_text="I'm here to support you with your studies. How can I help you today?",
             has_study_plan=False,
@@ -406,6 +499,7 @@ def build_graph() -> StateGraph:
     graph.add_node("prepare_context", prepare_context_node)
     graph.add_node("request_processor", request_processor_node)
     graph.add_node("student_insight", student_insight_node)
+    graph.add_node("study_plan_intake", study_plan_intake_node)
     graph.add_node("study_planner", study_planner_node)
     graph.add_node("recovery_coach", recovery_coach_node)
     graph.add_node("response_validator", response_validator_node)
@@ -421,6 +515,7 @@ def build_graph() -> StateGraph:
         {
             "response_validator": "response_validator",
             "student_insight": "student_insight",
+            "study_plan_intake": "study_plan_intake",  # direct shortcut for active intake turns
             "recovery_coach": "recovery_coach",
         },
     )
@@ -429,6 +524,17 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges(
         "student_insight",
         route_after_insight,
+        {
+            "study_plan_intake": "study_plan_intake",
+            "study_planner": "study_planner",
+            "recovery_coach": "recovery_coach",
+        },
+    )
+
+    # ── Conditional Routing after Study Plan Intake ───────────────────────────
+    graph.add_conditional_edges(
+        "study_plan_intake",
+        route_after_intake,
         {
             "study_planner": "study_planner",
             "recovery_coach": "recovery_coach",
@@ -494,6 +600,14 @@ async def run_graph_with_events(initial_state: GraphState):
             elif node_name == "student_insight":
                 intent = accumulated_state.get("intent")
                 if intent == "study_planning":
+                    yield ("status", create_agent_status_event("study_plan_intake", status="working"))
+                else:
+                    yield ("status", create_agent_status_event("recovery_coach", status="working"))
+
+            elif node_name == "study_plan_intake":
+                intake = accumulated_state.get("intake_state")
+                step_val = getattr(intake, "step", None)
+                if step_val == "complete" or not getattr(intake, "active", False):
                     yield ("status", create_agent_status_event("study_planner", status="working"))
                 else:
                     yield ("status", create_agent_status_event("recovery_coach", status="working"))

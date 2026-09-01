@@ -318,41 +318,8 @@ FROM teachers t JOIN users u ON t.user_id = u.id WHERE u.email = 'ravi.b@nitte.e
 LIMIT 1
 ON CONFLICT DO NOTHING;
 
--- Seed Default Goals for Demo Student
-INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
-SELECT 1, s.id, 'Maintain 85% Attendance', 'Attendance', '85%', 66, 'in-progress', (CURRENT_DATE + INTERVAL '30 days')::date
-FROM students s WHERE s.usn = '1MS21IS001'
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
-(1, 1, 'Attend all DCN lectures this week (4/4)', true),
-(2, 1, 'Attend all ML Foundations lectures (3/3)', true),
-(3, 1, 'Check OS attendance record on portal by Friday', false)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
-SELECT 2, s.id, 'Complete All Coursework & Assignments', 'Assignment', '100%', 33, 'in-progress', (CURRENT_DATE + INTERVAL '20 days')::date
-FROM students s WHERE s.usn = '1MS21IS001'
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
-(4, 2, 'Submit Network Layer Subnetting Assignment in DCN', true),
-(5, 2, 'Complete ML Foundation Lab Exercise 3', false),
-(6, 2, 'Verify submission status with course mentor', false)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO student_goals (id, student_id, title, category, target, progress, status, due_date)
-SELECT 3, s.id, 'Target 8.5+ SGPA in Semester 5', 'Academic', 'SGPA 8.5', 50, 'on-track', (CURRENT_DATE + INTERVAL '60 days')::date
-FROM students s WHERE s.usn = '1MS21IS001'
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO goal_milestones (id, goal_id, title, completed) VALUES
-(7, 3, 'Complete 2 hours of self-study on DCN routing protocols', true),
-(8, 3, 'Score 18+ in ML Internal Assessment 1', false)
-ON CONFLICT (id) DO NOTHING;
-
-SELECT setval(pg_get_serial_sequence('student_goals', 'id'), coalesce(max(id), 1)) FROM student_goals;
-SELECT setval(pg_get_serial_sequence('goal_milestones', 'id'), coalesce(max(id), 1)) FROM goal_milestones;
+-- Students are populated dynamically upon live portal login.
+-- No hardcoded mock students or demo goals.
 
 -- ============================================================
 -- EDUGUARDIAN CHATBOT DATABASE SCHEMA

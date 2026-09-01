@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from chatbot.backend.db.models import Conversation, Message
 from chatbot.backend.schemas.chat import MessageRole, MessageSchema
-from chatbot.backend.schemas.planner import StudyPlan
+from chatbot.backend.schemas.planner import StudyPlan, StudyPlanIntakeState
 from chatbot.backend.schemas.teaching import TeachingState
 from chatbot.backend.schemas.quiz import QuizState
 from chatbot.backend.schemas.learning_history import LearningHistory, TopicQuizRecord
@@ -245,6 +245,44 @@ class ConversationRepository:
                         return StudyPlan.model_validate(plan_data)
                     except Exception as exc:
                         logger.warning("Failed to deserialize StudyPlan from message_id=%s: %s", msg.id, exc)
+        return None
+
+    async def get_latest_study_plan_intake(
+        self,
+        conversation_id: uuid.UUID,
+    ) -> StudyPlanIntakeState | None:
+        """
+        Retrieves the most recent active StudyPlanIntakeState for this conversation.
+
+        Scans assistant messages in reverse chronological order for structured_data["intake_state"].
+        Returns None if no active (incomplete) intake session is found.
+        Follows the same pattern as get_latest_teaching_state().
+        """
+        result = await self._session.execute(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.role == MessageRole.ASSISTANT.value,
+                Message.structured_data.isnot(None),
+            )
+            .order_by(Message.created_at.desc())
+            .limit(20)
+        )
+        messages = list(result.scalars().all())
+        for msg in messages:
+            if msg.structured_data and isinstance(msg.structured_data, dict):
+                intake_data = msg.structured_data.get("intake_state")
+                if intake_data and isinstance(intake_data, dict):
+                    try:
+                        intake = StudyPlanIntakeState.model_validate(intake_data)
+                        # Only return if the intake session is still active (not yet complete)
+                        if intake.active and intake.step != "complete":
+                            return intake
+                    except Exception as exc:
+                        logger.debug(
+                            "ConversationRepository: Skipped malformed intake_state in message_id=%s (%s)",
+                            msg.id, exc
+                        )
         return None
 
     async def get_latest_teaching_state(

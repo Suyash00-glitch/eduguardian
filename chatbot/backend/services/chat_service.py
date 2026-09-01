@@ -9,10 +9,11 @@ Handles:
 """
 from __future__ import annotations
 
-from datetime import datetime
-
+import asyncio
+import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
 from fastapi import HTTPException, status
 
@@ -119,9 +120,9 @@ class ChatService:
         if request.conversation_id:
             conversation = await self._conv_repo.get_conversation(request.conversation_id)
             if not conversation:
-                conversation = await self._conv_repo.create_conversation(
-                    student_id=student_id,
-                    title=auto_title,
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found.",
                 )
             elif not _is_student_match(conversation.student_id, student_id):
                 logger.warning(
@@ -151,7 +152,16 @@ class ChatService:
         history_schemas = [self._conv_repo.to_schema(m) for m in history_messages]
 
         msg_l = msg_text.lower()
-        is_plan_inquiry = any(k in msg_l for k in ["study plan", "schedule", "routine", "roadmap", "plan for", "make me a plan", "create a plan", "give me a plan"])
+        is_plan_inquiry = any(k in msg_l for k in [
+            "study plan", "schedule", "routine", "roadmap", "plan for", "make me a plan",
+            "create a plan", "give me a plan", "detailed plan", "timetable", "hours a day",
+            "study on", "prefer morning", "prefer evening", "prefer night", "more time to",
+            "make it easier", "change monday", "sundays too", "weak subjects", "exam prep",
+        ])
+
+        latest_intake = await self._conv_repo.get_latest_study_plan_intake(conversation_id)
+        if latest_intake and getattr(latest_intake, "active", False):
+            is_plan_inquiry = True
 
         latest_plan = await self._conv_repo.get_latest_study_plan(conversation_id) if is_plan_inquiry else None
         latest_teaching_state = await self._conv_repo.get_latest_teaching_state(conversation_id)
@@ -168,6 +178,7 @@ class ChatService:
             "conversation_history": history_schemas,
             "teaching_state": latest_teaching_state,
             "quiz_state": latest_quiz_state,
+            "intake_state": latest_intake,
             "learning_history": learning_history_dict,
             "insight_response": None,
             "plan_response": latest_plan,
@@ -209,6 +220,11 @@ class ChatService:
         if plan_response and new_plan_generated:
             structured_payload = plan_response.model_dump(mode="json")
             structured_payload["type"] = "study_plan"
+        if result_state.get("intake_state"):
+            intake_st = result_state.get("intake_state")
+            if structured_payload is None:
+                structured_payload = {}
+            structured_payload["intake_state"] = intake_st.model_dump(mode="json") if hasattr(intake_st, "model_dump") else intake_st
         if coach_response and coach_response.teaching_state:
             if structured_payload is None:
                 structured_payload = {}
@@ -255,7 +271,7 @@ class ChatService:
             try:
                 import urllib.request
                 sync_url = "http://edu-backend:5000/api/recovery/ai-sync"
-                req_data = json.dumps(study_plan_schema.model_dump(mode="json")).encode("utf-8")
+                req_data =json.dumps(study_plan_schema.model_dump(mode="json")).encode("utf-8")
                 req = urllib.request.Request(
                     sync_url,
                     data=req_data,
@@ -293,8 +309,7 @@ class ChatService:
         """
         Executes a chat turn and yields Server-Sent Events (SSE) token chunks progressively.
         """
-        import asyncio
-        import json
+        
         import re
         from chatbot.backend.db.session import AsyncSessionLocal
         from chatbot.backend.db.repositories.conversation import ConversationRepository
@@ -341,7 +356,19 @@ class ChatService:
                 history_schemas = [conv_repo.to_schema(m) for m in history_messages]
 
                 msg_l = msg_text.lower()
-                is_plan_inquiry = any(k in msg_l for k in ["study plan", "schedule", "routine", "roadmap", "plan for", "make me a plan", "create a plan", "give me a plan"])
+                is_plan_inquiry = any(k in msg_l for k in [
+                    "study plan", "schedule", "routine", "roadmap", "plan for", "make me a plan",
+                    "create a plan", "give me a plan", "detailed plan", "timetable", "hours a day",
+                    "hour a day", "hours per day", "study on", "prefer morning", "prefer evening",
+                    "prefer night", "prefer afternoon", "more time to", "make it easier",
+                    "change monday", "sundays too", "weak subjects", "exam prep",
+                    "i can study", "monday to", "monday-to", "weekdays", "weekends",
+                    "make it only", "1 hour", "2 hours", "3 hours",
+                ])
+
+                latest_intake = await conv_repo.get_latest_study_plan_intake(conversation_id)
+                if latest_intake and getattr(latest_intake, "active", False):
+                    is_plan_inquiry = True
 
                 latest_plan = await conv_repo.get_latest_study_plan(conversation_id) if is_plan_inquiry else None
                 latest_teaching_state = await conv_repo.get_latest_teaching_state(conversation_id)
@@ -358,6 +385,7 @@ class ChatService:
                     "conversation_history": history_schemas,
                     "teaching_state": latest_teaching_state,
                     "quiz_state": latest_quiz_state,
+                    "intake_state": latest_intake,
                     "learning_history": learning_history_dict,
                     "insight_response": None,
                     "plan_response": latest_plan,
@@ -394,6 +422,11 @@ class ChatService:
                 if plan_response and new_plan_generated:
                     structured_payload = plan_response.model_dump(mode="json")
                     structured_payload["type"] = "study_plan"
+                if result_state.get("intake_state"):
+                    intake_st = result_state.get("intake_state")
+                    if structured_payload is None:
+                        structured_payload = {}
+                    structured_payload["intake_state"] = intake_st.model_dump(mode="json") if hasattr(intake_st, "model_dump") else intake_st
                 if coach_response and coach_response.teaching_state:
                     if structured_payload is None:
                         structured_payload = {}

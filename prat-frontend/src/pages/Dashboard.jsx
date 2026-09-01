@@ -152,18 +152,14 @@ function Dashboard() {
                 background:
                   academicStanding.badgeTone === "warning"
                     ? "rgba(255,209,102,0.15)"
-                    : academicStanding.badgeTone === "danger"
-                    ? "rgba(231,111,111,0.15)"
                     : "rgba(6,214,160,0.12)",
                 color:
                   academicStanding.badgeTone === "warning"
                     ? "#ffd166"
-                    : academicStanding.badgeTone === "danger"
-                    ? "var(--danger)"
                     : "var(--primary)",
               }}
             >
-              {academicStanding.standingLabel || "Active"}
+              {academicStanding.standingLabel || "Active Standing"}
             </span>
           </div>
           <div className="stat-value">
@@ -192,36 +188,21 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Metric 3: Academic Velocity / Trajectory */}
+        {/* Metric 3: Active Academic Term */}
         <div className="dashboard-stat-card">
           <div className="stat-card-top">
             <div className="stat-icon">
-              <Activity size={18} />
+              <Target size={18} />
             </div>
-            <span style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", fontWeight: 500 }}>
-              Trajectory
+            <span style={{ fontSize: "var(--font-xs)", color: "var(--primary)", fontWeight: 600 }}>
+              Enrolled Term
             </span>
           </div>
-          <div
-            className="stat-value"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color:
-                trend === "improving"
-                  ? "var(--primary)"
-                  : trend === "declining"
-                  ? "var(--danger)"
-                  : "var(--text)",
-            }}
-          >
-            {trend === "improving" && <TrendingUp size={22} />}
-            {trend === "declining" && <TrendingDown size={22} />}
-            {trend === "stable" && <Minus size={22} />}
-            {trend.charAt(0).toUpperCase() + trend.slice(1)}
+          <div className="stat-value" style={{ color: "var(--text)" }}>
+            Semester {currentSem}
+            <small>{identity.department || "ISE"}</small>
           </div>
-          <div className="stat-label">Semester-over-semester</div>
+          <div className="stat-label">Active Academic Enrollment</div>
         </div>
 
         {/* Metric 4: Total Credits Earned */}
@@ -272,20 +253,14 @@ function Dashboard() {
               background:
                 academicStanding.badgeTone === "warning"
                   ? "rgba(255,209,102,0.15)"
-                  : academicStanding.badgeTone === "danger"
-                  ? "rgba(231,111,111,0.15)"
                   : "rgba(6,214,160,0.12)",
               color:
                 academicStanding.badgeTone === "warning"
                   ? "#ffd166"
-                  : academicStanding.badgeTone === "danger"
-                  ? "var(--danger)"
                   : "var(--primary)",
               border:
                 academicStanding.badgeTone === "warning"
                   ? "1px solid rgba(255,209,102,0.3)"
-                  : academicStanding.badgeTone === "danger"
-                  ? "1px solid rgba(231,111,111,0.3)"
                   : "1px solid rgba(6,214,160,0.25)",
             }}
           >
